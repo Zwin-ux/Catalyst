@@ -1,4 +1,9 @@
-# Catalyst Discord Gamification Engine
+
+![fcb903fd-618b-4e04-b07f-08bfe8de5fe2](https://github.com/user-attachments/assets/3670aee1-7dc6-44f8-8ba7-80abf05546b6)
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=40&pause=1000&color=F7D900&center=true&vCenter=true&width=800&lines=CATALYST" alt="CATALYST title" />
+</p>
+
 
 **Catalyst** is a modular, fully interactive Discord bot engine for gamifying communities through playful, creative events (plot twists, showdowns, aura-offs, and spotlights), voting, and dynamic channels.
 
