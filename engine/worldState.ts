@@ -5,7 +5,7 @@ export interface WorldUser {
   id: string;
   name: string;
   xp: number;
-  dramaPoints: number;
+  hype: number; // Positive points for spotlight, social energy, or hype
   badges: string[];
   factionId?: string;
 }

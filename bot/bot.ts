@@ -1,10 +1,19 @@
-import { Client, GatewayIntentBits, Partials, GuildMember, Role, Interaction, REST, Routes, SlashCommandBuilder, Guild, Message, Channel, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder } from 'discord.js';
-import dotenv from 'dotenv';
+import { Client, GatewayIntentBits, Partials, GuildMember, Role, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, TextChannel, Guild, Message, Interaction, SlashCommandBuilder, REST, Routes, Colors } from 'discord.js'; // Only import once
+
+// Interface for type-safe channel operations
+interface SovereignResponse {
+  content?: string;
+  embeds?: any[];
+  components?: any[];
+}
 import fetch from 'node-fetch';
-dotenv.config();
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
 // --- ENGINE WORLD IMPORTS ---
 import { WorldStateManager, WorldUser, DramaEvent } from '../engine/worldState';
-import { DynamicEventGenerator, CoupEvent } from '../engine/eventGenerator';
+import { DynamicEventGenerator, SpotlightChallengeEvent } from '../engine/eventGenerator';
 import { ProgressionSystem } from '../engine/progression';
 import { TimelineAnalytics } from '../engine/timeline';
 import fs from 'fs';
@@ -27,8 +36,8 @@ const world = loadWorldState();
 
 // --- DYNAMIC EVENT GENERATOR INIT ---
 const eventGen = new DynamicEventGenerator([
-  CoupEvent,
-  // TODO: Add more dramatic events here
+  SpotlightChallengeEvent,
+  // TODO: Add more playful events here
 ]);
 
 // --- AUTO-SAVE WORLD STATE EVERY 5 MIN ---
@@ -36,8 +45,15 @@ setInterval(() => saveWorldState(world), 5 * 60 * 1000);
 
 // Faction logic
 import { factionCreateCmd, factionJoinCmd, factionLeaveCmd, handleFactionCreate, handleFactionJoin, handleFactionLeave, factionActionRow } from './faction';
-import { logDramaAlliance, logDramaEvent } from './drama';
-// (Removed duplicate import of ButtonBuilder, ButtonStyle, ActionRowBuilder, Interaction)
+// Import the drama event logging functions - resolving the naming conflict
+import { logDramaAlliance, logDramaEvent as logDramaEventToDb } from './drama';
+
+// --- PLACEHOLDER STUBS TO UNBLOCK COMPILATION ---
+// TODO: Implement or import these as needed
+async function autoDetectDrama(message: Message): Promise<number> { return 0; }
+async function autoSuggestFaction(client: Client, message: Message): Promise<void> { }
+function kingScheduler() { }
+const setupCmd = new SlashCommandBuilder().setName('setup').setDescription('Setup command');
 
 const client = new Client({
   intents: [
@@ -109,22 +125,34 @@ client.on('voiceStateUpdate', async (oldState: any, newState: any) => {
 async function sovereignScheduler() {
   const now = new Date();
   const periodStart = new Date(now.getTime() - ENGINE_CONFIG.schedulerInterval); // Dynamic interval
+  // Define interface for the API response
+  interface SovereignResponse {
+    sovereign?: {
+      userId: string;
+      points: number;
+    };
+  }
+
   const res = await fetch(`${ENGINE_CONFIG.pointsApi}/points/sovereign?start=${periodStart.toISOString()}`);
-  const data = await res.json();
+  const data = await res.json() as SovereignResponse;
   if (!data.sovereign) return;
   const guild = client.guilds.cache.first();
   if (!guild) return;
+  // Now TypeScript knows data.sovereign exists and has userId
   const member = await guild.members.fetch(data.sovereign.userId).catch(() => undefined);
   if (!member) return;
   // Assign Sovereign role
   let sovereignRole = guild.roles.cache.find((r: Role) => r.name === ENGINE_CONFIG.sovereignRoleName);
   if (!sovereignRole) {
-    sovereignRole = await guild.roles.create({ name: ENGINE_CONFIG.sovereignRoleName, color: 'GOLD', reason: 'Sovereign Engine event' });
+    sovereignRole = await guild.roles.create({ name: ENGINE_CONFIG.sovereignRoleName, color: Colors.Gold, reason: 'Sovereign Engine event' });
   }
   await member.roles.add(sovereignRole);
   // Announce
-  const channel = guild.channels.cache.find((c: Channel) => c.name === ENGINE_CONFIG.announceChannel && c.isTextBased()) as TextChannel;
-  if (channel) {
+  // Use proper type guard pattern instead of Channel type
+  const channel = guild.channels.cache.find(c => 
+    c.isTextBased() && 'name' in c && c.name === ENGINE_CONFIG.announceChannel
+  ) as TextChannel;
+  if (channel && 'send' in channel) {
     await channel.send(formatSovereignPrompt(`<@${member.id}>`, data.sovereign.points));
   }
 }
@@ -132,16 +160,24 @@ async function sovereignScheduler() {
 // Schedule using dynamic interval from ENGINE_CONFIG
 setInterval(sovereignScheduler, ENGINE_CONFIG.schedulerInterval);
 
-import { REST, Routes, SlashCommandBuilder, Interaction, TextChannel, Guild, Message, Channel } from 'discord.js';
-
 // --- Dynamic Channel Utilities ---
+// Type guard to check if a channel is a proper TextChannel with send method
+function isTextChannelWithSend(channel: any): channel is TextChannel {
+  return channel && typeof channel === 'object' && 'isTextBased' in channel && typeof channel.isTextBased === 'function' && channel.isTextBased() && 'send' in channel;
+}
+
+// Helper to ensure string parameters are always valid
+function ensureString(value: string | undefined | null, defaultValue: string = ''): string {
+  return value !== undefined && value !== null ? value : defaultValue;
+}
+
 export async function ensureEngineChannel(guild: Guild, name: string, topic: string): Promise<TextChannel> {
-  let channel = guild.channels.cache.find((c: Channel) => (c instanceof TextChannel) && c.name === name) as TextChannel;
+  let channel = guild.channels.cache.find(c => c.isTextBased() && 'name' in c && c.name === name) as TextChannel | undefined;
   if (!channel) channel = await guild.channels.create({ name, type: 0, topic }) as TextChannel;
   return channel;
 }
 export async function deleteEngineChannel(guild: Guild, name: string): Promise<void> {
-  const channel = guild.channels.cache.find((c: Channel) => (c instanceof TextChannel) && c.name === name) as TextChannel;
+  const channel = guild.channels.cache.find(c => c.isTextBased() && 'name' in c && c.name === name) as TextChannel | undefined;
   if (channel) await channel.delete();
 }
 
@@ -166,146 +202,196 @@ export async function addEmojiVoting(
   });
 }
 
+import { handleMessage } from './moderation';
+import { handleCommand } from '../commands';
+
+// Import plugin system
+import pluginRegistry from '../plugins';
+import dramaEventsPlugin from '../plugins/drama-events';
+import factionSystemPlugin from '../plugins/faction-system';
+import serverControlPlugin from '../plugins/server-control';
+
+import { eventCapture } from '../core/eventCapture';
 
 client.once('ready', async () => {
   console.log(`Bot ready as ${client.user?.tag}`);
+  
+  // Initialise central event-capture engine
+  eventCapture.init(client);
+  
+  // Initialize plugin system
+  pluginRegistry.setClient(client);
+  
+  // Register plugins
+  await pluginRegistry.registerPlugin(dramaEventsPlugin);
+  await pluginRegistry.registerPlugin(factionSystemPlugin);
+  await pluginRegistry.registerPlugin(serverControlPlugin);
+  
+  console.log(`Registered ${pluginRegistry.getAllPlugins().length} plugins`);
+  
   // --- ENGINE CHANNEL CONTROL CENTER ---
   const guild = client.guilds.cache.first();
+  
+  if (!guild) {
+    console.error('No guild available. Bot must be in at least one server.');
+    return;
+  }
+
+  // Ensure all engine channels exist first
+  // Use simple, game-like names for UI channels
+  const engineChannels = [
+    { name: 'hub', topic: 'Game Hub & Tips' },
+    { name: 'config', topic: 'Game Settings & Configuration' },
+    { name: 'powers', topic: 'Available Powers & Features' },
+    { name: 'mods', topic: 'Mods & Community Submissions' },
+    { name: 'timeline', topic: 'Drama Timeline & Hall of Fame' }
+  ];
+
+  // Create any missing channels
+  for (const { name, topic } of engineChannels) {
+    let channel = guild.channels.cache.find((c: any) => 
+      isTextChannelWithSend(c) && 'name' in c && c.name === name) as TextChannel | undefined;
+    if (!channel) {
+      console.log(`Creating missing channel: ${name}`);
+      await guild.channels.create({ name, type: 0, topic });
+    }
+  }
+
   // --- POST TIMELINE SUMMARY ON STARTUP ---
-  if (guild) {
-    const timelineChannel = guild.channels.cache.find((c: Channel) => c.name === 'timeline' && c.isTextBased());
-    if (timelineChannel && 'send' in timelineChannel) {
-      const events = TimelineAnalytics.getRecentEvents(world, 5);
-      if (events.length > 0) {
-        await (timelineChannel as TextChannel).send({ embeds: [{
-          title: '📜 Recent Drama Timeline',
-          description: events.map(e => `${new Date(e.timestamp).toLocaleString()}: ${e.description} (${e.impact} pts)`).join('\n'),
-          color: 0xff8800,
-          timestamp: new Date().toISOString()
-        }] });
-      }
+  const timelineChannel = guild.channels.cache.find((c: any) => 
+    isTextChannelWithSend(c) && 'name' in c && c.name === 'timeline'
+  ) as TextChannel | undefined;
+  
+  if (timelineChannel && 'send' in timelineChannel) {
+    // Post recent events if available
+    const events = TimelineAnalytics.getRecentEvents(world, 5);
+    if (events.length > 0) {
+      await timelineChannel.send({ embeds: [{
+        title: '📜 Recent Drama Timeline',
+        description: events.map(e => `${new Date(e.timestamp).toLocaleString()}: ${e.description} (${e.impact} pts)`).join('\n'),
+        color: Colors.Green,
+        timestamp: new Date().toISOString()
+      }] });
     }
+    
+    // Post Hall of Fame
+    const msg = await timelineChannel.send({
+      embeds: [{
+        title: '🏆 Hall of Fame & Drama Timeline',
+        description: 'See the most dramatic moments, top Sovereigns, and legendary coups here! (Timeline coming soon)',
+        color: Colors.Orange,
+        image: { url: 'https://cdn.pixabay.com/photo/2016/03/31/19/14/crown-1294906_1280.png' },
+        footer: { text: 'ENGINE | Hall of Fame' },
+        timestamp: new Date().toISOString()
+      }]
+    });
+    await addEmojiVoting(timelineChannel, msg.id, ['👍', '👎'], async results => {
+      await timelineChannel.send({ content: `Timeline votes: 👍 ${results['👍']} | 👎 ${results['👎']}` });
+    });
   }
-    // Ensure all engine channels exist
-    // Use simple, game-like names for UI channels
-    const engineChannels = [
-      { name: 'hub', topic: 'Game Hub & Tips' },
-      { name: 'config', topic: 'Game Settings & Configuration' },
-      { name: 'powers', topic: 'Available Powers & Features' },
-      { name: 'mods', topic: 'Mods & Community Submissions' },
-      { name: 'timeline', topic: 'Drama Timeline & Hall of Fame' }
-    ];
-    for (const { name, topic } of engineChannels) {
-      let channel = guild.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === name && c.isTextBased()) as TextChannel | undefined;
-      if (!channel) {
-        channel = await guild.channels.create({ name, type: 0, topic });
-      }
-    }
-    // Onboarding tips for new users
-    const helpChannel = guild.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'engine-help' && c.isTextBased()) as TextChannel | undefined;
-    if (helpChannel && 'send' in helpChannel) {
-      await helpChannel.send({
-        embeds: [{
-          title: '👋 Welcome to the Game',
-          description: `Compete for the ${ENGINE_CONFIG.sovereignRoleName} by earning drama points and engaging in events. Use buttons and emoji votes in the other channels to play! Settings and features are managed here—no slash commands needed.`,
-          color: 0x00bfff,
-          image: { url: 'https://cdn.pixabay.com/photo/2017/01/31/13/14/soap-bubble-2025834_1280.jpg' },
-          footer: { text: 'Game Hub & Tips' },
-          timestamp: new Date().toISOString()
-        }]
-      });
-    }
-    // Post current powers/features in #powers
-    if (name === 'powers') {
-      const powersChannel = guild.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'powers' && c.isTextBased()) as TextChannel | undefined;
-      if (powersChannel && 'send' in powersChannel) {
-        const msg = await powersChannel.send({
-          embeds: [{
-            title: '⚡ Powers & Features',
-            description: `- Duel (challenge another player)\n- Edict (make a server-wide announcement)\n- Grant Temp Role\n- Start Coup\n- Start Vote\n- Change Banner\n- Mod Manager (submit/vote on new features)`,
-            color: 0xf8c300,
-            image: { url: 'https://cdn.pixabay.com/photo/2016/03/31/19/14/crown-1294906_1280.png' },
-            footer: { text: 'ENGINE | Powers & Features' },
-            timestamp: new Date().toISOString()
-          }]
-        });
-      }
-    }
-    // Post mods info in #mods
-    if (name === 'mods') {
-      const modsChannel = guild.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'mods' && c.isTextBased()) as TextChannel | undefined;
-      if (modsChannel && 'send' in modsChannel) {
-        const msg = await modsChannel.send({
-          embeds: [{
-            title: '🧩 Mods & Community Submissions',
-            description: 'Propose and vote on new drama events, minigames, and analytics mods! Upload/enable coming soon.',
-            color: 0x9b59b6,
-            image: { url: 'https://cdn.pixabay.com/photo/2017/01/31/13/14/soap-bubble-2025834_1280.jpg' },
-            footer: { text: 'Mods' },
-            timestamp: new Date().toISOString()
-          }]
-        });
-        await addEmojiVoting(modsChannel, msg.id, ['👍','👎'], async results => {
-          await modsChannel.send({ content: `Mods votes: 👍 ${results['👍']} | 👎 ${results['👎']}` });
-        });
-      }
-    }
-    // Post timeline in #timeline
-    if (name === 'timeline') {
-      const timelineChannel = guild.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'timeline' && c.isTextBased()) as TextChannel | undefined;
-      if (timelineChannel && 'send' in timelineChannel) {
-        const msg = await timelineChannel.send({
-          embeds: [{
-            title: '🏆 Hall of Fame & Drama Timeline',
-            description: 'See the most dramatic moments, top Sovereigns, and legendary coups here! (Timeline coming soon)',
-            color: 0xff8800,
-            image: { url: 'https://cdn.pixabay.com/photo/2016/03/31/19/14/crown-1294906_1280.png' },
-            footer: { text: 'ENGINE | Hall of Fame' },
-            timestamp: new Date().toISOString()
-          }]
-        });
-      }
-    }
+
+  // Onboarding tips in hub channel
+  const hubChannel = guild.channels.cache.find((c: any) => 
+    c.isTextBased && c.isTextBased() && 'name' in c && c.name === 'hub'
+  ) as TextChannel | undefined;
+  
+  if (hubChannel && 'send' in hubChannel) {
+    await hubChannel.send({
+      embeds: [{
+        title: '👋 Welcome to the Game',
+        description: `Compete for the ${ENGINE_CONFIG.sovereignRoleName} by earning drama points and engaging in events. Use buttons and emoji votes in the other channels to play! Settings and features are managed here—no slash commands needed.`,
+        color: Colors.Blue,
+        image: { url: 'https://cdn.pixabay.com/photo/2017/01/31/13/14/soap-bubble-2025834_1280.jpg' },
+        footer: { text: 'Game Hub & Tips' },
+        timestamp: new Date().toISOString()
+      }]
+    });
   }
-  // Run scheduler
-  sovereignScheduler();
+  
+  // Powers channel setup
+  const powersChannel = guild.channels.cache.find((c: any) => 
+    c.isTextBased && c.isTextBased() && 'name' in c && c.name === 'powers'
+  ) as TextChannel | undefined;
+  
+  if (powersChannel && 'send' in powersChannel) {
+    await powersChannel.send({
+      embeds: [{
+        title: '⚡ Powers & Features',
+        description: `- Duel (challenge another player)\n- Edict (make a server-wide announcement)\n- Grant Temp Role\n- Start Coup\n- Start Vote\n- Change Banner\n- Mod Manager (submit/vote on new features)`,
+        color: Colors.Yellow,
+        image: { url: 'https://cdn.pixabay.com/photo/2016/03/31/19/14/crown-1294906_1280.png' },
+        footer: { text: 'ENGINE | Powers & Features' },
+        timestamp: new Date().toISOString()
+      }]
+    });
+  }
+
+  // Post mods info in #mods
+  const modsChannel = guild.channels.cache.find((c: any) => 
+    c.isTextBased && c.isTextBased() && 'name' in c && c.name === 'mods'
+  ) as TextChannel | undefined;
+  
+  if (modsChannel && 'send' in modsChannel) {
+    const msg = await modsChannel.send({
+      embeds: [{
+        title: '🧩 Mods & Community Submissions',
+        description: 'Propose and vote on new drama events, minigames, and analytics mods! Upload/enable coming soon.',
+        color: Colors.Purple,
+        image: { url: 'https://cdn.pixabay.com/photo/2017/01/31/13/14/soap-bubble-2025834_1280.jpg' },
+        footer: { text: 'Mods' },
+        timestamp: new Date().toISOString()
+      }]
+    });
+    await addEmojiVoting(modsChannel, msg.id, ['👍','👎'], async results => {
+      await modsChannel.send({ content: `Mods votes: 👍 ${results['👍']} | 👎 ${results['👎']}` });
+    });
+  }
 });
 
 // All help/setup/powers/plugins/timeline are handled via engine-* channels and buttons. No slash commands needed.
 // (Legacy /setup handler removed)
 
-import { handleMessage } from './moderation';
-
 client.on('messageCreate', async (message: Message) => {
-  await handleMessage(client, message);
-  // --- DRAMA AUTO-DETECTION ---
+  // Skip bot messages immediately to avoid processing them
   if (message.author.bot) return;
-  // --- WORLD STATE: USER PARTICIPATION ---
+  
+  // Try to process as a command first
+  const isCommand = await handleCommand(client, message);
+  if (isCommand) return; // Skip further processing if it was a command
+  
+  // Pass message to plugin system
+  await pluginRegistry.handleMessage(message);
+  
+  // Handle message moderation
+  await handleMessage(client, message);
   let user = world.getState().users[message.author.id];
   if (!user) {
     user = { id: message.author.id, name: message.author.username, xp: 0, dramaPoints: 0, badges: [] };
     world.updateUser(user.id, user);
   }
   ProgressionSystem.addXP(user, 1);
-  // --- DRAMA SPIKE DETECTION ---
-  const dramaScore = await autoDetectDrama(message);
-  if (dramaScore > 5) {
-    ProgressionSystem.addDramaPoints(user, dramaScore);
-    const dramaEvent: DramaEvent = {
-      id: 'drama-' + Date.now(),
-      type: 'drama',
+  // --- CREATIVE EVENT DETECTION ---
+  const eventScore = await autoDetectDrama(message);
+  if (eventScore > 5) {
+    ProgressionSystem.addHype(user, eventScore);
+    const event: DramaEvent = {
+      id: 'event-' + Date.now(),
+      type: 'spotlight',
       timestamp: Date.now(),
       participants: [user.id],
-      description: `${user.name} caused drama!`,
-      impact: dramaScore
+      description: `${user.name} caused a creative event!`,
+      impact: eventScore
     };
-    world.addDramaEvent(dramaEvent);
+    world.addDramaEvent(event);
     // --- FEEDBACK: POST TO TIMELINE ---
-    const timelineChannel = message.guild?.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'timeline' && c.isTextBased()) as TextChannel | undefined;
+    // Find the timeline channel for posting drama events
+    const timelineChannel = message.guild?.channels.cache.find((c: any) => 
+      c.isTextBased && c.isTextBased() && 'name' in c && c.name === 'timeline'
+    ) as TextChannel | undefined;
     if (timelineChannel && 'send' in timelineChannel) {
       await timelineChannel.send({ embeds: [{
-        title: '🔥 Drama Erupts!',
-        description: `${user.name} just caused drama! (+${dramaScore} drama points)`,
+        title: '🔥 Creative Event Unfolds!',
+        description: `${user.name} just caused a creative event! (+${eventScore} hype points)`,
         color: 0xff4444,
         timestamp: new Date().toISOString()
       }] });
@@ -325,14 +411,16 @@ import pool from '../src/utils/db';
 setInterval(async () => {
   // Check for betrayals/dissolutions every 10 minutes
   const { rows: alliances } = await pool.query('SELECT * FROM drama_alliances');
-  for (const row of alliances) {
+  for (const row of alliances as any[]) {
     const inactive = (Date.now() - new Date(row.last_interaction).getTime()) > 7 * 24 * 60 * 60 * 1000;
     const negative = row.drama_score < -5;
     if ((row.type === 'alliance' && negative) || inactive) {
       // Betrayal/dissolution event
       const guilds = Array.from(client.guilds.cache.values());
       for (const guild of guilds) {
-        const channel = guild.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'general' && c.isTextBased()) as TextChannel | undefined;
+        const channel = guild.channels.cache.find(c => 
+          c.isTextBased() && 'name' in c && c.name === 'general'
+        ) as TextChannel | undefined;
         if (channel && 'send' in channel) {
           const embed = new EmbedBuilder()
             .setTitle('💔 Betrayal or Dissolution!')
@@ -355,7 +443,7 @@ async function autoCheckFactionWar(client: import('discord.js').Client, userA: s
   if (Math.random() < 0.2) {
     const guild = client.guilds.cache.first();
     if (!guild) return;
-    const channel = guild.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'general' && c.isTextBased()) as TextChannel | undefined;
+    const channel = guild.channels.cache.find((c: any) => isTextChannelWithSend(c) && c.name === 'general') as TextChannel | undefined;
     if (channel && 'send' in channel) {
       await channel.send({
         embeds: [{
@@ -382,7 +470,7 @@ async function autoAnnounceLeaderboard(guild: import('discord.js').Guild) {
   `);
   const topUser = leaders[0]?.user_id;
   const topPoints = leaders[0]?.total_points;
-  const channel = guild.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'general' && c.isTextBased()) as TextChannel | undefined;
+  const channel = guild.channels.cache.find((c: any) => isTextChannelWithSend(c) && c.name === 'general') as TextChannel | undefined;
   if (channel && 'send' in channel) {
     let description = 'Who is ruling the drama this week? (Automated update)';
     if (topUser) {
@@ -416,6 +504,9 @@ async function autoAnnounceLeaderboard(guild: import('discord.js').Guild) {
 
 // --- Handle Takeover Button & King's Decree ---
 client.on('interactionCreate', async (interaction: Interaction) => {
+  // Pass interaction to plugin system
+  await pluginRegistry.handleInteraction(interaction);
+  
   if (!interaction.isButton()) return;
   // --- Sovereign Takeover Button ---
   if (interaction.customId.startsWith('engine_takeover_')) {
@@ -472,7 +563,9 @@ client.on('interactionCreate', async (interaction: Interaction) => {
         ]
       });
       // Announce in Hall of Fame
-      const fameChannel = guild.channels.cache.find((c: Channel) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'engine-hall-of-fame' && c.isTextBased()) as TextChannel | undefined;
+      const fameChannel = guild.channels.cache.find(c => 
+        c.isTextBased() && 'name' in c && c.name === 'engine-hall-of-fame'
+      ) as TextChannel | undefined;
       if (fameChannel && 'send' in fameChannel) {
         await fameChannel.send({
           embeds: [{
@@ -535,7 +628,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     });
     // Next message from King with !decree will be broadcast
     const filter = (m: any) => m.author.id === interaction.user.id && m.content.startsWith('!decree');
-    const channel = guild.channels.cache.find((c) => (c instanceof Channel || c instanceof Object) && 'name' in c && c.name === 'general' && c.isTextBased()) as TextChannel | undefined;
+    const channel = guild.channels.cache.find((c: any) => isTextChannelWithSend(c) && c.name === 'general') as TextChannel | undefined;
     if (channel && 'send' in channel) {
       const collector = channel.createMessageCollector({ filter, max: 1, time: 60000 });
       collector.on('collect', async (m: any) => {
@@ -568,7 +661,9 @@ setInterval(async () => {
     lastKingPoll = now;
     const guilds = Array.from(client.guilds.cache.values());
     for (const guild of guilds) {
-      const channel = guild.channels.cache.find((c: Channel) => c.name === 'general' && c.isTextBased());
+      const channel = guild.channels.cache.find((c: any) => 
+        isTextChannelWithSend(c) && 'name' in c && c.name === 'general'
+      ) as TextChannel | undefined;
       if (channel && 'send' in channel) {
         await channel.send({
           embeds: [{
@@ -616,28 +711,33 @@ async function autoTriggerDramaEvent(client: import('discord.js').Client, messag
   const authorId = message.author.id;
   if (!dramaTracker[authorId]) dramaTracker[authorId] = { mentions: {}, dramaPoints: 0 };
   dramaTracker[authorId].dramaPoints += score;
-  message.mentions.users.forEach(u => {
+  message.mentions.users.forEach((u: any) => {
     if (!dramaTracker[authorId].mentions[u.id]) dramaTracker[authorId].mentions[u.id] = 0;
     dramaTracker[authorId].mentions[u.id]++;
     // Persist rivalry to DB
-    logDramaAlliance(authorId, u.id, 'rivalry', score).catch(() => {});
+    logDramaAlliance(ensureString(authorId), ensureString(u.id), 'rivalry', score).catch(() => {});
   });
   // Find top two drama rivals (author and most mentioned)
   const mentioned = message.mentions.users.first();
   if (!mentioned) return;
   // Announce duel with enhanced embed and interactive voting buttons
   const channel = message.channel;
+  
+  // Check if channel has send method using our type guard
+  if (!isTextChannelWithSend(channel)) return;
+  
   const duelRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId(`vote_${authorId}`).setLabel('Vote Challenger').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`vote_${mentioned.id}`).setLabel('Vote Rival').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('cheer').setLabel('Cheer!').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('boo').setLabel('Boo!').setStyle(ButtonStyle.Secondary)
   );
+  
   await channel.send({
     embeds: [{
       title: '⚡ Drama Duel Begins!',
       description: `A heated argument has erupted between <@${authorId}> and <@${mentioned.id}>! \nWho will win the Coliseum's favor?`,
-      color: 0xff0000,
+      color: Colors.Red,
       timestamp: new Date().toISOString(),
       thumbnail: { url: message.author.displayAvatarURL() },
       fields: [
@@ -648,25 +748,31 @@ async function autoTriggerDramaEvent(client: import('discord.js').Client, messag
     }],
     components: [duelRow]
   });
-  await logDramaEvent('duel', authorId, mentioned.id, null, null, score, { messageId: message.id });
+  await logDramaEventToDb('duel', ensureString(authorId), ensureString(mentioned.id), null, null, score, { messageId: ensureString(message.id) });
   // Auto-initiate faction war if drama between two factions is high
   await autoCheckFactionWar(client, authorId, mentioned.id);
   // Auto-announce leaderboard if drama points pass threshold
   if (dramaTracker[authorId].dramaPoints > 20) {
-    await autoAnnounceLeaderboard(channel.guild);
-    dramaTracker[authorId].dramaPoints = 0;
+    // Check if channel.guild exists before using it
+    if ('guild' in channel && channel.guild) {
+      await autoAnnounceLeaderboard(channel.guild);
+      dramaTracker[authorId].dramaPoints = 0;
+    }
   }
   // Random drama night trigger
-  if (Math.random() < 0.05) {
+  if (Math.random() < 0.05 && isTextChannelWithSend(channel)) {
     await channel.send({
       embeds: [{
         title: '🌙 Random Drama Night!',
         description: 'The Coliseum is ablaze! All drama points are doubled for the next hour!',
-        color: 0x3333ff,
+        color: Colors.Blue,
         footer: { text: 'Automated event | Drama escalates!' }
       }]
     });
-    await logDramaEvent('random_drama_night', authorId, null, null, null, 0, {});
+    // Use our helper function to ensure string parameters are always valid
+    // Make sure authorId is never undefined by using our ensureString helper
+    const safeAuthorId = ensureString(authorId, 'system');
+    await logDramaEventToDb('random_drama_night', safeAuthorId, null, null, null, 0, {});
   }
 }
 
@@ -674,27 +780,35 @@ async function autoSuggestFaction(client: import('discord.js').Client, message: 
   // Persistent tracking: increment mention pairs
   const authorId = message.author.id;
   if (!dramaTracker[authorId]) dramaTracker[authorId] = { mentions: {}, dramaPoints: 0 };
-  message.mentions.users.forEach(u => {
+  message.mentions.users.forEach((u: any) => {
     if (!dramaTracker[authorId].mentions[u.id]) dramaTracker[authorId].mentions[u.id] = 0;
     dramaTracker[authorId].mentions[u.id]++;
     // Suggest faction if mentioned 3+ times
     if (dramaTracker[authorId].mentions[u.id] === 3) {
       const ch = message.channel;
+      
+      // Check if channel has send method using our type guard
+      if (!isTextChannelWithSend(ch)) return;
+      
+      // Ensure IDs are defined before using in customId
+      if (!authorId || !u.id) return;
+      
       const allianceRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`faction_create_${authorId}_${u.id}`).setLabel('Form Faction').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('cheer_alliance').setLabel('Cheer!').setStyle(ButtonStyle.Primary)
       );
+      
       ch.send({
         embeds: [{
           title: '🤝 Alliance Detected!',
           description: `<@${authorId}> and <@${u.id}> keep teaming up! Should they form a faction?`,
-          color: 0x00ff99,
+          color: Colors.Green,
           footer: { text: 'Click below to create a faction instantly!' }
         }],
         components: [allianceRow]
       });
       logDramaAlliance(authorId, u.id, 'alliance', 1).catch(() => {});
-      logDramaEvent('alliance_suggestion', authorId, u.id, null, null, 1, {});
+      logDramaEventToDb('alliance_suggestion', authorId, u.id, null, null, 1, {});
     }
   });
 }
@@ -708,13 +822,26 @@ async function autoSuggestFaction(client: import('discord.js').Client, message: 
 // Admin moderation slash commands
 const modSetupCmd = new SlashCommandBuilder().setName('modsetup').setDescription('Configure moderation settings');
 const modLogCmd = new SlashCommandBuilder().setName('modlog').setDescription('View recent moderation actions');
+
+// --- REMINDER: Run your schema in the Supabase SQL Editor, not via the init-db script ---
 const modRewardCmd = new SlashCommandBuilder().setName('modreward').setDescription('Review and grant moderator rewards');
 const modConfigCmd = new SlashCommandBuilder().setName('modconfig').setDescription('Configure AI toxicity, spam filters, and escalation');
 
+function getEnvString(key: string, fallback?: string): string {
+  const value = process.env[key];
+  if (value === undefined || value === null || value === '') {
+    if (fallback !== undefined) return fallback;
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+}
+
+const restInstance = new REST({ version: '10' }).setToken(getEnvString('DISCORD_BOT_TOKEN'));
+
 client.once('ready', async () => {
+  // Register commands
+  await restInstance.put(Routes.applicationCommands(client.user!.id), { body: [modSetupCmd.toJSON(), modLogCmd.toJSON(), modRewardCmd.toJSON(), modConfigCmd.toJSON()] });
   // ...existing code...
-  await rest.put(Routes.applicationCommands(client.user!.id), { body: [setupCmd.toJSON(), modSetupCmd.toJSON(), modLogCmd.toJSON(), modRewardCmd.toJSON(), modConfigCmd.toJSON()] });
-  kingScheduler();
 });
 
 client.on('interactionCreate', async (interaction: Interaction) => {
@@ -724,7 +851,6 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     await handleFactionCreate(interaction, client);
     return;
   }
-  }
 });
 
-client.login(process.env.DISCORD_BOT_TOKEN);
+client.login(getEnvString('DISCORD_BOT_TOKEN'));

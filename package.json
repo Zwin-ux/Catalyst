@@ -6,14 +6,19 @@
   "scripts": {
     "dev": "ts-node-dev src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "db:init": "npx ts-node scripts/init-db.ts",
+    "db:migrate": "echo 'Add migration logic here'",
+    "db:reset": "echo 'Add DB reset logic here'",
+    "test": "echo 'No test suite yet'"
   },
   "dependencies": {
-    "discord.js": "^14.14.1",
-    "node-fetch": "^3.3.2",
+    "@supabase/supabase-js": "^2.49.4",
     "cors": "^2.8.5",
+    "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
+    "node-fetch": "^3.3.2",
     "pg": "^8.11.3"
   },
   "devDependencies": {

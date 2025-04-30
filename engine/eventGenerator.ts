@@ -1,4 +1,4 @@
-// DynamicEventGenerator: Schedules and triggers drama, coups, and surprise events
+// DynamicEventGenerator: Schedules and triggers showdowns, spotlight challenges, and surprise creative events
 import { WorldStateManager, DramaEvent } from './worldState';
 
 export type DynamicEvent = {
@@ -27,15 +27,15 @@ export class DynamicEventGenerator {
 }
 
 // Example event
-export const CoupEvent: DynamicEvent = {
-  name: 'Coup',
+export const SpotlightChallengeEvent: DynamicEvent = {
+  name: 'Spotlight Challenge',
   trigger: (state) => Math.random() < 0.01, // 1% chance per check
   execute: (state) => ({
-    id: 'coup-' + Date.now(),
-    type: 'coup',
+    id: 'spotlight-challenge-' + Date.now(),
+    type: 'spotlight_challenge',
     timestamp: Date.now(),
     participants: [],
-    description: 'A sudden coup shakes the world!',
+    description: 'A playful Spotlight Challenge shakes up the world! Factions compete for the spotlight with creativity and flair.',
     impact: 50
   }),
   cooldown: 1000 * 60 * 60 // 1 hour

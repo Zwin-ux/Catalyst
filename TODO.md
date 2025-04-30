@@ -10,13 +10,14 @@
     - Clean up duplicate imports and type guards.
 - [ ] **Test Bot:**
     - Ensure the bot starts and runs without crashing.
-    - Test drama, faction, and timeline features end-to-end.
+    - Test playful event, faction, and spotlight timeline features end-to-end.
     - Validate dynamic channel and voting features.
 
 ## Enhancements & Features
-- [ ] Expand dramatic event types in the Dynamic Event Generator.
-- [ ] Add more analytics and timeline summaries (top drama users, faction wars, etc.).
+- [ ] Expand playful event types (plot twists, showdowns, aura-offs, spotlight challenges) in the Dynamic Event Generator.
+- [ ] Add more analytics and timeline summaries (top spotlight users, creative rivalries, etc.).
 - [ ] Polish user feedback and error handling (especially for failed commands or missing permissions).
+- [ ] All major core mechanics and docs now use positive, creative language and playful systems.
 - [ ] Improve onboarding and help messages for new users.
 - [ ] Consider web dashboard for analytics and moderation.
 
