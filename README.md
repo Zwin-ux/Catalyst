@@ -16,12 +16,9 @@
 - No slash commands needed—users interact via buttons, emoji, and dynamic messages.
 - Positive, community-focused design: All mechanics encourage creativity, collaboration, and fun rather than competition or negativity.
 
-## Status & Known Issues (as of 2025-04-28)
-- **INTEGRATION COMPLETE:** World State Manager, Dynamic Event Generator, and Progression System are integrated and persist state to disk.
-- **KNOWN ISSUES:**
-    - Some TypeScript syntax errors remain (unmatched brackets, misplaced code blocks).
-    - Lint errors: implicit `any` types, duplicate imports, and type guards needed for channel lookups.
-    - Bot may not start until these errors are fixed. See `TODO.md` for details.
+
+
+
 
 ## Next Steps
 - **Fix all remaining TypeScript errors and lint issues.**
