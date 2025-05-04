@@ -7,6 +7,7 @@ interface SovereignResponse {
   components?: any[];
 }
 import fetch from 'node-fetch';
+import './global.d.ts';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -50,9 +51,60 @@ import { logDramaAlliance, logDramaEvent as logDramaEventToDb } from './drama';
 
 // --- PLACEHOLDER STUBS TO UNBLOCK COMPILATION ---
 // TODO: Implement or import these as needed
-async function autoDetectDrama(message: Message): Promise<number> { return 0; }
-async function autoSuggestFaction(client: Client, message: Message): Promise<void> { }
-function kingScheduler() { }
+// --- Persistent Drama Tracking ---
+const dramaTracker: Record<string, { mentions: Record<string, number>, dramaPoints: number }> = {};
+
+// --- Automation Hooks ---
+async function autoDetectDrama(message: Message): Promise<number> {
+  let score = 0;
+  if ((message.mentions.users.size + message.mentions.roles.size) > 1) score += 2;
+  if (message.content === message.content.toUpperCase() && message.content.length > 10) score += 2;
+  const dramaWords = ['fight', 'vs', 'drama', 'beef', 'war', 'callout', 'battle'];
+  if (dramaWords.some(w => message.content.toLowerCase().includes(w))) score += 2;
+  // Sentiment/toxicity API integration
+  try {
+    const resp = await fetch(process.env.TOXICITY_API_URL!, {
+      method: 'POST',
+      body: JSON.stringify({ text: message.content }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const apiResult = await resp.json() as { toxic?: boolean; score?: number };
+    if (apiResult.toxic) score += Math.ceil((apiResult.score ?? 0) * 5); // Weight highly
+  } catch (e) { /* ignore if API fails */ }
+  return score;
+}
+
+// Persistent tracking: increment mention pairs
+async function autoSuggestFaction(client: Client, message: Message): Promise<void> {
+  const authorId = message.author.id;
+  if (!dramaTracker[authorId]) dramaTracker[authorId] = { mentions: {}, dramaPoints: 0 };
+  message.mentions.users.forEach((u: any) => {
+    if (!dramaTracker[authorId].mentions[u.id]) dramaTracker[authorId].mentions[u.id] = 0;
+    dramaTracker[authorId].mentions[u.id]++;
+    // Suggest faction if mentioned 3+ times
+    if (dramaTracker[authorId].mentions[u.id] === 3) {
+      const ch = message.channel;
+      if (!isTextChannelWithSend(ch)) return;
+      const allianceRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId('create-faction').setLabel('Create Faction').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('ignore').setLabel('Ignore').setStyle(ButtonStyle.Secondary)
+      );
+      ch.send({
+        embeds: [{
+          title: '🤝 Alliance Detected!',
+          description: `<@${authorId}> and <@${u.id}> keep teaming up! Should they form a faction?`,
+          color: Colors.Green,
+          footer: { text: 'Click below to create a faction instantly!' }
+        }],
+        components: [allianceRow]
+      });
+      logDramaAlliance(authorId, u.id, 'alliance', 1).catch(() => {});
+      logDramaEventToDb('alliance_suggestion', authorId, u.id, null, null, 1, {});
+    }
+  });
+}
+
+function kingScheduler(): void { /* Implement king scheduling logic here if needed */ }
 const setupCmd = new SlashCommandBuilder().setName('setup').setDescription('Setup command');
 
 const client = new Client({
@@ -285,7 +337,7 @@ client.once('ready', async () => {
         timestamp: new Date().toISOString()
       }]
     });
-    await addEmojiVoting(timelineChannel, msg.id, ['👍', '👎'], async results => {
+    await addEmojiVoting(timelineChannel, msg.id, ['👍', '👎'], async (results: Record<string, number>) => {
       await timelineChannel.send({ content: `Timeline votes: 👍 ${results['👍']} | 👎 ${results['👎']}` });
     });
   }
@@ -366,7 +418,7 @@ client.on('messageCreate', async (message: Message) => {
   await handleMessage(client, message);
   let user = world.getState().users[message.author.id];
   if (!user) {
-    user = { id: message.author.id, name: message.author.username, xp: 0, dramaPoints: 0, badges: [] };
+    user = { id: message.author.id, name: message.author.username, xp: 0, hype: 0, dramaPoints: 0, badges: [] };
     world.updateUser(user.id, user);
   }
   ProgressionSystem.addXP(user, 1);
@@ -578,19 +630,9 @@ client.on('interactionCreate', async (interaction: Interaction) => {
           }]
         });
       }
-    } catch {}
-    await interaction.reply({ content: 'You have claimed the Sovereign role!', ephemeral: true });
-  }
-
-  // --- Engine Coup Vote Handler (Automated, Modular) ---
-  if (interaction.customId === 'engine_coup_yes' || interaction.customId === 'engine_coup_no') {
-    if (!globalThis.engineCoupVotes) globalThis.engineCoupVotes = { yes: 0, no: 0, voters: new Set() };
-    if (globalThis.engineCoupVotes.voters.has(interaction.user.id)) {
-      await interaction.reply({ content: 'You have already voted in this coup!', ephemeral: true });
-      return;
+    } catch {
+      globalThis.engineCoupVotes.no++;
     }
-    if (interaction.customId === 'engine_coup_yes') globalThis.engineCoupVotes.yes++;
-    else globalThis.engineCoupVotes.no++;
     globalThis.engineCoupVotes.voters.add(interaction.user.id);
     // Edge case: not enough votes
     const totalVotes = globalThis.engineCoupVotes.yes + globalThis.engineCoupVotes.no;
@@ -694,8 +736,8 @@ async function autoDetectDrama(message: import('discord.js').Message): Promise<n
       body: JSON.stringify({ text: message.content }),
       headers: { 'Content-Type': 'application/json' }
     });
-    const { toxic, score: toxicityScore } = await resp.json();
-    if (toxic) score += Math.ceil(toxicityScore * 5); // Weight highly
+    const apiResult = await resp.json() as { toxic?: boolean; score?: number };
+    if (apiResult.toxic) score += Math.ceil((apiResult.score ?? 0) * 5); // Weight highly
   } catch (e) { /* ignore if API fails */ }
   return score;
 }

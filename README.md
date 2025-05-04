@@ -1,8 +1,15 @@
 # Catalyst Discord Gamification Engine
 
+
 **Catalyst** is a modular, fully interactive Discord bot engine for gamifying communities through playful, creative events (plot twists, showdowns, aura-offs, and spotlights), voting, and dynamic channels.
 
-### Core Features
+
+![alt text](image.png)
+![alt text](image-1.png)
+![alt text](image-2.png)
+![alt text](image-3.png)
+
+### Core Features | Goals
 - Persistent world state: users, factions, and playful event history (plot twists, showdowns, spotlights) are saved and evolve in real time.
 - Dynamic channel management (`hub`, `config`, `powers`, `mods`, `timeline`).
 - Emoji voting and interactive buttons on all major events and proposals.

@@ -34,8 +34,8 @@ export async function handleMessage(client: Client, message: Message) {
   // Anti-toxicity (stub for AI integration)
   if (TOXICITY_API) {
     const resp = await fetch(TOXICITY_API, { method: 'POST', body: JSON.stringify({ text: message.content }), headers: { 'Content-Type': 'application/json' } });
-    const { toxic } = await resp.json();
-    if (toxic) {
+    const apiResult = await resp.json() as { toxic?: boolean };
+    if (apiResult.toxic) {
       await escalate(client, message, 'toxicity');
     }
   }

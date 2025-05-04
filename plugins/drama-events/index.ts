@@ -58,7 +58,7 @@ const DRAMA_KEYWORDS = {
 // This enables drama events to trigger on all messages, even outside plugin system
 // (still allows pluginManager to call onMessage for legacy support)
 eventCapture.on('message', (msg: Message) => {
-  dramaEventsPlugin.onMessage(msg).catch(console.error);
+  dramaEventsPlugin.onMessage?.(msg)?.catch(console.error);
 });
 
 // Drama Events Plugin

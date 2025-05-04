@@ -55,7 +55,7 @@ const serverControlPlugin: Plugin = {
   
   // Update chaos level based on message activity
   updateChaosLevel(message: Message): void {
-    const currentChaos = this.config.chaosLevel || 0;
+    const currentChaos = this.config?.chaosLevel || 0;
     
     // Increase chaos for dramatic messages
     const dramaScore = this.calculateDramaScore(message);
@@ -63,10 +63,10 @@ const serverControlPlugin: Plugin = {
     
     // Decrease chaos over time
     const decay = 0.01; // 1% decay per minute
-    const timeSinceLast = (Date.now() - (this.config.lastReorganization || 0)) / 60000; // minutes
+    const timeSinceLast = (Date.now() - (this.config?.lastReorganization || 0)) / 60000; // minutes
     const decayedChaos = Math.max(0, newChaos - (newChaos * decay * timeSinceLast));
     
-    this.config.chaosLevel = decayedChaos;
+    if (this.config) this.config.chaosLevel = decayedChaos;
     
     console.log(`[Server Control] Chaos level: ${decayedChaos.toFixed(2)}%`);
   },
@@ -100,14 +100,14 @@ const serverControlPlugin: Plugin = {
     if (!CONFIG.ENABLE_SERVER_RESTRUCTURING) return false;
     
     const now = Date.now();
-    const lastReorg = this.config.lastReorganization || 0;
-    const cooldown = this.config.reorgCooldown || 86400000;
+    const lastReorg = this.config?.lastReorganization || 0;
+    const cooldown = this.config?.reorgCooldown || 86400000;
     
     // Check cooldown
     if (now - lastReorg < cooldown) return false;
     
     // Check chaos level
-    return this.config.chaosLevel >= CONFIG.SERVER_CHAOS_THRESHOLD;
+    return (this.config?.chaosLevel ?? 0) >= CONFIG.SERVER_CHAOS_THRESHOLD;
   },
   
   // Reorganize the server based on current state
@@ -125,8 +125,8 @@ const serverControlPlugin: Plugin = {
       await this.updateChannelPermissions(guild);
       
       // Update chaos level and reset timer
-      this.config.chaosLevel = 0;
-      this.config.lastReorganization = Date.now();
+      if (this.config) this.config.chaosLevel = 0;
+      if (this.config) this.config.lastReorganization = Date.now();
       
       console.log('[Server Control] Server reorganization complete');
       
@@ -158,6 +158,7 @@ const serverControlPlugin: Plugin = {
   // Create faction territories
   async createFactionTerritories(guild: Guild): Promise<void> {
     // Get all factions from database
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { data: factions, error: factionsError } = await supabase
       .from('factions')
       .select('*')
@@ -192,7 +193,7 @@ const serverControlPlugin: Plugin = {
         territoryChannel = await guild.channels.create({
           name: `territory-${faction.name.toLowerCase().replace(/\s+/g, '-')}`,
           type: ChannelType.GuildText,
-          parent: territoryCategory,
+          parent: territoryCategory.id,
           reason: `Creating territory for ${faction.name}`,
           permissionOverwrites: [
             {
@@ -208,13 +209,14 @@ const serverControlPlugin: Plugin = {
       }
       
       // Store territory mapping
-      this.config.factionTerritories.set(faction.id, territoryChannel?.id || '');
+      (this.config?.factionTerritories ?? new Map()).set(faction.id, territoryChannel?.id || '');
     }
   },
   
   // Restructure role hierarchy
   async restructureRoleHierarchy(guild: Guild): Promise<void> {
     // Get all factions and their power levels
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { data: factions, error: factionsError } = await supabase
       .from('factions')
       .select('*')
@@ -250,7 +252,7 @@ const serverControlPlugin: Plugin = {
     );
     
     // Update permissions based on faction territories
-    for (const [factionId, territoryId] of this.config.factionTerritories) {
+    for (const [factionId, territoryId] of (this.config?.factionTerritories ?? new Map())) {
       const territoryChannel = channels.get(territoryId);
       if (!territoryChannel) continue;
       
@@ -329,7 +331,7 @@ const serverControlPlugin: Plugin = {
             await guild.channels.create({
               name: channel.name,
               type: ChannelType.GuildText,
-              parent: category,
+              parent: category?.id,
               reason: 'Server initialization'
             });
           }

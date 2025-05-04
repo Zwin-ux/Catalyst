@@ -32,10 +32,10 @@ export async function handleFactionCreate(interaction: CommandInteraction, clien
     await interaction.reply({ content: '❌ Faction already exists! Try a different name.', ephemeral: true });
     return;
   }
-  // Create role
+  // Creates role
   const role = await guild.roles.create({
     name: emoji ? `${emoji} ${name}` : name,
-    color: color || Colors.Blurple,
+    color: color ? parseInt(color.replace('#', ''), 16) : Colors.Blurple,
     reason: `Faction created by ${interaction.user.tag}`
   });
   // Insert faction into DB
@@ -49,7 +49,7 @@ export async function handleFactionCreate(interaction: CommandInteraction, clien
   const embed = new EmbedBuilder()
     .setTitle(`🏟️ New Faction Rises!`)
     .setDescription(`${emoji || ''} **${name}** has entered the Coliseum!\n<@${userId}> is the founder.`)
-    .setColor(color || Colors.Blurple)
+    .setColor(color ? parseInt(color.replace('#', ''), 16) : Colors.Blurple)
     .addFields({ name: 'Tag', value: role.toString(), inline: true })
     .setTimestamp();
   await interaction.reply({ embeds: [embed] });

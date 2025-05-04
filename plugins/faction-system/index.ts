@@ -48,6 +48,7 @@ const factionSystemPlugin: Plugin = {
     
     // Create faction tables if they don't exist
     try {
+      if (!supabase) throw new Error('Supabase client not initialized');
       const { error } = await supabase.rpc('init_faction_tables');
       if (error) {
         console.error('[Faction System] Error initializing faction tables:', error);
@@ -66,16 +67,18 @@ const factionSystemPlugin: Plugin = {
       ) as TextChannel | undefined;
       
       if (channel && isTextChannelWithSend(channel)) {
-        await channel.send({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle('🏛️ Faction System Activated')
-              .setDescription('The Faction System is now active! Use `!faction help` to see available commands.')
-              .setColor(Colors.Blue)
-              .setFooter({ text: 'Catalyst Faction System Plugin' })
-              .setTimestamp()
-          ]
-        });
+        if ('send' in channel) {
+          await channel.send({
+            embeds: [
+              new EmbedBuilder()
+                .setTitle('🏛️ Faction System Activated')
+                .setDescription('The Faction System is now active! Use `!faction help` to see available commands.')
+                .setColor(Colors.Blue)
+                .setFooter({ text: 'Catalyst Faction System Plugin' })
+                .setTimestamp()
+            ]
+          });
+        }
       }
     }
   },
@@ -141,12 +144,14 @@ const factionSystemPlugin: Plugin = {
       return;
     }
     
+    if (!this.config || !this.config.minFactionNameLength || !this.config.maxFactionNameLength) return;
     if (name.length < this.config.minFactionNameLength || name.length > this.config.maxFactionNameLength) {
-      await message.reply(`Faction name must be between ${this.config.minFactionNameLength} and ${this.config.maxFactionNameLength} characters.`);
+      await message.reply(`Faction name must be between ${this.config?.minFactionNameLength ?? 3} and ${this.config?.maxFactionNameLength ?? 32} characters.`);
       return;
     }
     
     // Check if faction already exists
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { data: existingFactions, error: fetchError } = await supabase
       .from('factions')
       .select('name')
@@ -169,6 +174,7 @@ const factionSystemPlugin: Plugin = {
     const factionColor = Math.floor(Math.random() * 0xFFFFFF);
     const factionEmoji = ['⚔️', '🛡️', '🏹', '🔮', '🧙', '🧝', '🧟', '🧞', '🦁', '🐉', '🐺', '🦊'][Math.floor(Math.random() * 12)];
     
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { error: insertError } = await supabase
       .from('factions')
       .insert({
@@ -190,6 +196,11 @@ const factionSystemPlugin: Plugin = {
     }
     
     // Add creator as first member
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while creating your faction. Please try again later.');
+      return;
+    }
     const { error: memberError } = await supabase
       .from('faction_members')
       .insert({
@@ -206,7 +217,7 @@ const factionSystemPlugin: Plugin = {
     // Create faction role
     try {
       const role = await message.guild.roles.create({
-        name: `${this.config.factionRolePrefix}${name}`,
+        name: `${this.config?.factionRolePrefix ?? ''}${name}`,
         color: factionColor,
         reason: `Faction created by ${message.author.tag}`
       });
@@ -216,13 +227,13 @@ const factionSystemPlugin: Plugin = {
       
       // Create faction channel
       const category = message.guild.channels.cache.find(c => 
-        c.type === 4 && c.name === this.config.factionChannelCategory
+        c.type === 4 && c.name === (this.config?.factionChannelCategory ?? 'Factions')
       );
       
       if (!category) {
         // Create category if it doesn't exist
         const newCategory = await message.guild.channels.create({
-          name: this.config.factionChannelCategory,
+          name: this.config?.factionChannelCategory ?? 'Factions',
           type: 4,
           reason: 'Faction System Category'
         });
@@ -231,7 +242,7 @@ const factionSystemPlugin: Plugin = {
         const factionChannel = await message.guild.channels.create({
           name: `faction-${name.toLowerCase().replace(/\s+/g, '-')}`,
           type: 0, // Text channel
-          parent: newCategory,
+          parent: newCategory.id,
           reason: `Faction channel for ${name}`,
           permissionOverwrites: [
             {
@@ -246,7 +257,7 @@ const factionSystemPlugin: Plugin = {
         });
         
         // Send welcome message
-        if (isTextChannelWithSend(factionChannel)) {
+        if (factionChannel && isTextChannelWithSend(factionChannel)) {
           await factionChannel.send({
             embeds: [
               new EmbedBuilder()
@@ -268,7 +279,7 @@ const factionSystemPlugin: Plugin = {
         const factionChannel = await message.guild.channels.create({
           name: `faction-${name.toLowerCase().replace(/\s+/g, '-')}`,
           type: 0, // Text channel
-          parent: category.id,
+          parent: category?.id,
           reason: `Faction channel for ${name}`,
           permissionOverwrites: [
             {
@@ -283,7 +294,7 @@ const factionSystemPlugin: Plugin = {
         });
         
         // Send welcome message
-        if (isTextChannelWithSend(factionChannel)) {
+        if (factionChannel && isTextChannelWithSend(factionChannel)) {
           await factionChannel.send({
             embeds: [
               new EmbedBuilder()
@@ -343,6 +354,11 @@ const factionSystemPlugin: Plugin = {
     }
     
     // Check if faction exists
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while joining the faction. Please try again later.');
+      return;
+    }
     const { data: factions, error: fetchError } = await supabase
       .from('factions')
       .select('*')
@@ -363,6 +379,11 @@ const factionSystemPlugin: Plugin = {
     const faction = factions[0];
     
     // Check if user is already in this faction
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while joining the faction. Please try again later.');
+      return;
+    }
     const { data: membership, error: membershipError } = await supabase
       .from('faction_members')
       .select('*')
@@ -382,6 +403,11 @@ const factionSystemPlugin: Plugin = {
     }
     
     // Check if user is in another faction
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while joining the faction. Please try again later.');
+      return;
+    }
     const { data: otherMembership, error: otherMembershipError } = await supabase
       .from('faction_members')
       .select('faction_id, factions:faction_id(name)')
@@ -395,11 +421,17 @@ const factionSystemPlugin: Plugin = {
     }
     
     if (otherMembership && otherMembership.length > 0) {
-      await message.reply(`You are already a member of the "${otherMembership[0].factions.name}" faction. You must leave your current faction before joining a new one.`);
+      const otherFactionName = otherMembership[0]?.factions?.[0]?.name ?? 'Unknown';
+      await message.reply(`You are already a member of the "${otherFactionName}" faction. You must leave your current faction before joining a new one.`);
       return;
     }
     
     // Add user to faction
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while joining the faction. Please try again later.');
+      return;
+    }
     const { error: joinError } = await supabase
       .from('faction_members')
       .insert({
@@ -416,6 +448,11 @@ const factionSystemPlugin: Plugin = {
     }
     
     // Update faction member count
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while joining the faction. Please try again later.');
+      return;
+    }
     const { error: updateError } = await supabase
       .from('factions')
       .update({ member_count: faction.member_count + 1 })
@@ -428,7 +465,7 @@ const factionSystemPlugin: Plugin = {
     // Assign faction role
     try {
       const role = message.guild.roles.cache.find(r => 
-        r.name === `${this.config.factionRolePrefix}${faction.name}`
+        r.name === `${this.config?.factionRolePrefix ?? ''}${faction?.name ?? ''}`
       );
       
       if (role) {
@@ -467,6 +504,11 @@ const factionSystemPlugin: Plugin = {
     if (!message.guild) return;
     
     // Check if user is in a faction
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while leaving the faction. Please try again later.');
+      return;
+    }
     const { data: membership, error: membershipError } = await supabase
       .from('faction_members')
       .select('faction_id, role, factions:faction_id(name, leader_id)')
@@ -485,7 +527,7 @@ const factionSystemPlugin: Plugin = {
     }
     
     const factionId = membership[0].faction_id;
-    const factionName = membership[0].factions.name;
+    const factionName = membership[0]?.factions?.[0]?.name ?? 'Unknown';
     const isLeader = membership[0].role === 'leader';
     
     // Leaders can't leave their faction, they must transfer leadership first
@@ -495,6 +537,11 @@ const factionSystemPlugin: Plugin = {
     }
     
     // Remove user from faction
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while leaving the faction. Please try again later.');
+      return;
+    }
     const { error: leaveError } = await supabase
       .from('faction_members')
       .delete()
@@ -508,6 +555,11 @@ const factionSystemPlugin: Plugin = {
     }
     
     // Update faction member count
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while leaving the faction. Please try again later.');
+      return;
+    }
     const { data: faction, error: fetchError } = await supabase
       .from('factions')
       .select('member_count')
@@ -528,7 +580,7 @@ const factionSystemPlugin: Plugin = {
     // Remove faction role
     try {
       const role = message.guild.roles.cache.find(r => 
-        r.name === `${this.config.factionRolePrefix}${factionName}`
+        r.name === `${this.config?.factionRolePrefix ?? ''}${factionName ?? ''}`
       );
       
       if (role) {
@@ -569,6 +621,11 @@ const factionSystemPlugin: Plugin = {
     
     if (!factionName) {
       // If no faction specified, show user's faction
+      if (!supabase) {
+        console.error('[Faction System] Supabase client not initialized');
+        await message.reply('An error occurred while fetching faction information. Please try again later.');
+        return;
+      }
       factionQuery = supabase
         .from('faction_members')
         .select(`
@@ -582,6 +639,11 @@ const factionSystemPlugin: Plugin = {
         .limit(1);
     } else {
       // Show specified faction
+      if (!supabase) {
+        console.error('[Faction System] Supabase client not initialized');
+        await message.reply('An error occurred while fetching faction information. Please try again later.');
+        return;
+      }
       factionQuery = supabase
         .from('factions')
         .select('*')
@@ -610,6 +672,11 @@ const factionSystemPlugin: Plugin = {
     const faction = factionName ? data[0] : data[0].factions;
     
     // Get faction members
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while fetching faction information. Please try again later.');
+      return;
+    }
     const { data: members, error: membersError } = await supabase
       .from('faction_members')
       .select('user_id, role')
@@ -638,28 +705,31 @@ const factionSystemPlugin: Plugin = {
     const createdDate = createdAt.toLocaleDateString();
     
     // Send faction info
-    await message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(`${faction.emoji} ${faction.name}`)
-          .setDescription(faction.description)
-          .setColor(faction.color)
-          .addFields(
-            { name: 'Leader', value: `<@${faction.leader_id}>`, inline: true },
-            { name: 'Members', value: `${faction.member_count}`, inline: true },
-            { name: 'Power', value: `${faction.power}`, inline: true },
-            { name: 'Created', value: createdDate, inline: true },
-            { name: 'Member List', value: memberList }
-          )
-          .setFooter({ text: `Faction ID: ${faction.id}` })
-          .setTimestamp()
-      ]
-    });
+    if ('send' in message.channel) {
+      await message.channel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(`${faction.emoji} ${faction.name}`)
+            .setDescription(faction.description)
+            .setColor(faction.color)
+            .addFields(
+              { name: 'Leader', value: `<@${faction.leader_id}>`, inline: true },
+              { name: 'Members', value: `${faction.member_count}`, inline: true },
+              { name: 'Power', value: `${faction.power}`, inline: true },
+              { name: 'Created', value: createdDate, inline: true },
+              { name: 'Member List', value: memberList }
+            )
+            .setFooter({ text: `Faction ID: ${faction.id}` })
+            .setTimestamp()
+        ]
+      });
+    }
   },
   
   // Handle list factions command
   async handleListFactions(message: Message): Promise<void> {
     // Get all factions
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { data: factions, error } = await supabase
       .from('factions')
       .select('*')
@@ -682,38 +752,42 @@ const factionSystemPlugin: Plugin = {
     ).join('\n\n');
     
     // Send faction list
-    await message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('🏛️ Factions')
-          .setDescription(`Here are the current factions:\n\n${factionList}`)
-          .setColor(Colors.Blue)
-          .setFooter({ text: 'Use !faction join <name> to join a faction' })
-          .setTimestamp()
-      ]
-    });
+    if ('send' in message.channel) {
+      await message.channel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('🏛️ Factions')
+            .setDescription(`Here are the current factions:\n\n${factionList}`)
+            .setColor(Colors.Blue)
+            .setFooter({ text: 'Use !faction join <name> to join a faction' })
+            .setTimestamp()
+        ]
+      });
+    }
   },
   
   // Handle faction help command
   async handleFactionHelp(message: Message): Promise<void> {
-    await message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('🏛️ Faction System Commands')
-          .setDescription('Here are the available faction commands:')
-          .setColor(Colors.Blue)
-          .addFields(
-            { name: '!faction create <name> [description]', value: 'Create a new faction', inline: false },
-            { name: '!faction join <name>', value: 'Join an existing faction', inline: false },
-            { name: '!faction leave', value: 'Leave your current faction', inline: false },
-            { name: '!faction info [name]', value: 'View info about a faction or your own faction', inline: false },
-            { name: '!faction list', value: 'List all factions', inline: false },
-            { name: '!faction help', value: 'Show this help message', inline: false }
-          )
-          .setFooter({ text: 'Catalyst Faction System Plugin' })
-          .setTimestamp()
-      ]
-    });
+    if ('send' in message.channel) {
+      await message.channel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('🏛️ Faction System Commands')
+            .setDescription('Here are the available faction commands:')
+            .setColor(Colors.Blue)
+            .addFields(
+              { name: '!faction create <name> [description]', value: 'Create a new faction', inline: false },
+              { name: '!faction join <name>', value: 'Join an existing faction', inline: false },
+              { name: '!faction leave', value: 'Leave your current faction', inline: false },
+              { name: '!faction info [name]', value: 'View info about a faction or your own faction', inline: false },
+              { name: '!faction list', value: 'List all factions', inline: false },
+              { name: '!faction help', value: 'Show this help message', inline: false }
+            )
+            .setFooter({ text: 'Catalyst Faction System Plugin' })
+            .setTimestamp()
+        ]
+      });
+    }
   }
 };
 

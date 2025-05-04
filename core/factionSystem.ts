@@ -17,6 +17,7 @@ export interface FactionAllianceData {
   created: Date;
   lastInteraction: Date;
   auraScore: number; // -10 to 10, negative means playful rivalry, positive means hype
+  dramaScore: number; // Added for drama power calculation
 }
 
 export interface FactionCreateOptions {
@@ -196,6 +197,7 @@ export class FactionSystem {
       created: new Date(),
       lastInteraction: new Date(),
       auraScore: 0, // Start neutral
+      dramaScore: 0, // Start neutral
     };
     
     this.alliances.push(alliance);
