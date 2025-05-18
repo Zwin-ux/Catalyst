@@ -14,6 +14,10 @@
 ![alt text](image-2.png)
 ![alt text](image-3.png)
 
+
+
+![image](https://github.com/user-attachments/assets/11ad1939-056c-4904-8632-8f35dc389ceb)
+
 ### Core Features | Goals
 - Persistent world state: users, factions, and playful event history (plot twists, showdowns, spotlights) are saved and evolve in real time.
 - Dynamic channel management (`hub`, `config`, `powers`, `mods`, `timeline`).
