@@ -4,10 +4,18 @@
  * Adds special drama events that can be triggered based on server activity
  */
 
-import { Client, Message, EmbedBuilder, Colors, TextChannel } from 'discord.js';
+import { Client, Message, TextChannel, EmbedBuilder, Colors, ColorResolvable } from 'discord.js';
 import { eventCapture } from '../../core/eventCapture';
 import { Plugin } from '../index';
 import { isTextChannelWithSend } from '../../utils/discord-helpers';
+
+// Drama event types and their keywords
+const DRAMA_KEYWORDS = {
+  'betrayal': ['betray', 'traitor', 'backstab', 'double cross'],
+  'alliance': ['ally', 'team up', 'join forces', 'work together'],
+  'treachery': ['treachery', 'deceit', 'betrayal', 'double-cross'],
+  'revelation': ['secret', 'reveal', 'truth', 'discover']
+} as const;
 import { CONFIG } from '../../config';
 
 // Drama event types
@@ -24,45 +32,73 @@ const DRAMA_EVENTS = [
     id: 'betrayal',
     name: 'Betrayal',
     description: 'A faction member has betrayed their allies!',
-    color: Colors.Purple,
-    image: 'https://cdn.pixabay.com/photo/2017/01/31/13/14/soap-bubble-2025834_1280.jpg',
-    points: 15
   },
   {
-    id: 'drama_night',
-    name: 'Drama Night',
-    description: 'The server is experiencing a surge of drama! All drama points are doubled for the next hour.',
-    color: Colors.Gold,
-    image: 'https://cdn.pixabay.com/photo/2017/01/31/13/14/soap-bubble-2025834_1280.jpg',
-    points: 5
+    id: 'alliance',
+    name: 'Unlikely Alliance',
+    description: 'Former rivals have joined forces!',
+    color: 0x9b59b6, // Purple
+    image: 'https://i.imgur.com/ABCD5678.png',
+    points: 30,
+    keywords: DRAMA_KEYWORDS.alliance
   },
   {
-    id: 'coup',
-    name: 'Coup Attempt',
-    description: 'A faction member is attempting to overthrow their leader!',
-    color: Colors.DarkRed,
-    image: 'https://cdn.pixabay.com/photo/2016/03/31/19/14/crown-1294906_1280.png',
-    points: 20
+    id: 'treachery',
+    name: 'Treachery Afoot',
+    description: 'Someone is not who they seem...',
+    color: 0xe67e22, // Orange
+    image: 'https://i.imgur.com/EFGH9012.png',
+    points: 40,
+    keywords: DRAMA_KEYWORDS.treachery
+  },
+  {
+    id: 'revelation',
+    name: 'Shocking Revelation',
+    description: 'A long-buried secret comes to light!',
+    color: 0x3498db, // Blue
+    image: 'https://i.imgur.com/IJKL3456.png',
+    points: 35,
+    keywords: DRAMA_KEYWORDS.revelation
   }
 ];
 
-// Keyword triggers for drama events
-const DRAMA_KEYWORDS = {
-  'faction_war': ['war', 'battle', 'fight', 'conflict', 'attack'],
-  'betrayal': ['betray', 'backstab', 'traitor', 'turncoat', 'defect'],
-  'drama_night': ['drama', 'chaos', 'mayhem', 'wild'],
-  'coup': ['overthrow', 'coup', 'rebellion', 'revolt', 'usurp', 'takeover']
-};
+// Track last event time to prevent spam
+let lastEventTime = Date.now() - 3600000; // Start with a cooldown of 1 hour ago
 
-// Subscribe to event bus for messages
-// This enables drama events to trigger on all messages, even outside plugin system
-// (still allows pluginManager to call onMessage for legacy support)
-eventCapture.on('message', (msg: Message) => {
-  dramaEventsPlugin.onMessage?.(msg)?.catch(console.error);
-});
+// Helper function to trigger a drama event
+async function triggerDramaEvent(message: Message, eventType: string, config: any): Promise<void> {
+  const event = DRAMA_EVENTS.find(e => e.id === eventType);
+  if (!event) return;
+  
+  // Find the announcement channel
+  const channel = message.guild?.channels.cache.find(c => 
+    c.isTextBased() && 'name' in c && c.name === (config?.announcementChannel || 'timeline')
+  ) as TextChannel | undefined;
+  
+  if (channel && isTextChannelWithSend(channel)) {
+    // Create the event embed
+    const embed = new EmbedBuilder()
+      .setTitle(`🎭 ${event.name}`)
+      .setDescription(`${event.description}\n\nTriggered by: <@${message.author.id}>`)
+      .setColor((event.color || Colors.Blue) as ColorResolvable)
+      .setTimestamp();
+    
+    // Add a random reaction
+    const reactions = ['🔥', '😱', '😮', '😈', '👀', '💥'];
+    const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
+    
+    // Send the message and add reaction
+    const sentMessage = await channel.send({ embeds: [embed] });
+    await sentMessage.react(randomReaction).catch(console.error);
+    
+    // Log the event
+    console.log(`[Drama Events] Triggered event: ${event.name} (${eventType})`);
+  }
+}
 
-// Drama Events Plugin
-const dramaEventsPlugin: Plugin = {
+// Define the plugin
+const dramaEventsPlugin: Plugin & { author: string } = {
+  author: 'Catalyst Team',
   id: 'drama-events',
   name: 'Drama Events',
   description: 'Adds special drama events that can be triggered based on server activity',
@@ -76,11 +112,9 @@ const dramaEventsPlugin: Plugin = {
     cooldownMinutes: 30
   },
   
-  // Track last event time to prevent spam
-  lastEventTime: Date.now() - 3600000, // Start with a cooldown of 1 hour ago
-  
   // Initialize plugin
-  async onLoad(client: Client): Promise<void> {
+  async onLoad(registry: any): Promise<void> {
+    const client = registry.client as Client;
     console.log(`[Drama Events] Plugin loaded with ${DRAMA_EVENTS.length} event types`);
     
     // Announce plugin activation in timeline channel
@@ -94,75 +128,35 @@ const dramaEventsPlugin: Plugin = {
         await channel.send({
           embeds: [
             new EmbedBuilder()
-              .setTitle('🎭 Drama Events System Activated')
-              .setDescription('The Drama Events system is now active! Special events can now be triggered based on server activity.')
-              .setColor(Colors.Green)
-              .setFooter({ text: 'Catalyst Drama Events Plugin' })
-              .setTimestamp()
+              .setTitle('🎭 Drama Events Activated')
+              .setDescription('The drama events plugin is now active. Get ready for some excitement!')
+              .setColor('#ff69b4')
           ]
-        });
+        }).catch(console.error);
       }
     }
   },
   
   // Handle messages to detect potential drama events
   async onMessage(message: Message): Promise<void> {
-    // Skip bot messages and respect cooldown
     if (message.author.bot) return;
     
     const now = Date.now();
     const cooldownMs = (this.config?.cooldownMinutes || 30) * 60 * 1000;
-    if (now - (this.lastEventTime as number) < cooldownMs) return;
     
-    // Check for drama keywords
+    // Check cooldown
+    if (now - lastEventTime < cooldownMs) return;
+    
+    // Check for keywords in message
     const content = message.content.toLowerCase();
-    let matchedEventType: string | null = null;
+    const matchedEventType = DRAMA_EVENTS.find(event => 
+      event.keywords?.some((keyword: string) => content.includes(keyword))
+    )?.id;
     
-    // Check each event type for keyword matches
-    for (const [eventType, keywords] of Object.entries(DRAMA_KEYWORDS)) {
-      if (keywords.some(keyword => content.includes(keyword))) {
-        matchedEventType = eventType;
-        break;
-      }
-    }
-    
-    // If keywords matched and random chance is met, trigger event
+    // Trigger event if conditions are met
     if (matchedEventType && Math.random() < (this.config?.eventProbability || 0.05)) {
-      await this.triggerDramaEvent(message, matchedEventType);
-      this.lastEventTime = now;
-    }
-  },
-  
-  // Trigger a drama event
-  async triggerDramaEvent(message: Message, eventType: string): Promise<void> {
-    const event = DRAMA_EVENTS.find(e => e.id === eventType);
-    if (!event) return;
-    
-    // Find the announcement channel
-    const channel = message.guild?.channels.cache.find(c => 
-      c.isTextBased() && 'name' in c && c.name === (this.config?.announcementChannel || 'timeline')
-    ) as TextChannel | undefined;
-    
-    if (channel && isTextChannelWithSend(channel)) {
-      // Create the event embed
-      const embed = new EmbedBuilder()
-        .setTitle(`🎭 ${event.name}`)
-        .setDescription(`${event.description}\n\nTriggered by: <@${message.author.id}>`)
-        .setColor(event.color)
-        .setImage(event.image)
-        .addFields({ name: 'Drama Points', value: `+${event.points} points`, inline: true })
-        .setFooter({ text: 'React to participate in this event!' })
-        .setTimestamp();
-      
-      // Send the announcement
-      const eventMessage = await channel.send({ embeds: [embed] });
-      
-      // Add reaction options
-      await eventMessage.react('👍'); // Support
-      await eventMessage.react('👎'); // Oppose
-      await eventMessage.react('🔥'); // Escalate
-      
-      console.log(`[Drama Events] Triggered ${event.name} event`);
+      await triggerDramaEvent(message, matchedEventType, this.config);
+      lastEventTime = now;
     }
   }
 };

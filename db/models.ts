@@ -49,7 +49,7 @@ export interface DramaEvent {
   resolved: boolean;           // Whether it's completed
   messageId?: string;          // Associated Discord message
   channelId?: string;          // Where it happened
-  timestamp: string;           // When it occurred
+  timestamp: Date;             // When the event occurred
   created_at?: string;         // Database timestamp
 }
 

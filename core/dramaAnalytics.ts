@@ -189,7 +189,7 @@ export class DramaAnalytics {
       score,
       outcome: '', // Will be filled in when resolved
       resolved: false,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(),
     };
   }
 

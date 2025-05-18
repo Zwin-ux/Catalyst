@@ -25,13 +25,29 @@ interface Faction {
 }
 
 // Faction System Plugin
-const factionSystemPlugin: Plugin = {
+interface FactionSystemPlugin extends Plugin {
+  commands: Record<string, (message: Message, args: string[]) => Promise<void>>;
+  handleCreateFaction: (message: Message, args: string[]) => Promise<void>;
+  handleJoinFaction: (message: Message, args: string[]) => Promise<void>;
+  handleLeaveFaction: (message: Message, args: string[]) => Promise<void>;
+  handleFactionInfo: (message: Message, args: string[]) => Promise<void>;
+  handleListFactions: (message: Message) => Promise<void>;
+  handleFactionHelp: (message: Message) => Promise<void>;
+  handleFactionCommand: (message: Message, args: string[]) => Promise<void>;
+}
+
+// Create the plugin object
+const factionSystemPlugin: FactionSystemPlugin = {
   id: 'faction-system',
   name: 'Faction System',
   description: 'Enables users to create, join, and manage factions within the server',
   version: '1.0.0',
   enabled: true,
-  commands: ['faction', 'factions'],
+  author: 'Catalyst Team',
+  commands: {
+    'faction': async (message, args) => factionSystemPlugin.handleFactionCommand(message, args),
+    'factions': async (message, args) => factionSystemPlugin.handleFactionCommand(message, args)
+  },
   
   // Plugin state
   config: {
@@ -43,7 +59,8 @@ const factionSystemPlugin: Plugin = {
   },
   
   // Initialize plugin
-  async onLoad(client: Client): Promise<void> {
+  async onLoad(registry: any): Promise<void> {
+    const client = registry.client as Client;
     console.log(`[Faction System] Plugin loaded`);
     
     // Create faction tables if they don't exist
@@ -697,34 +714,6 @@ const factionSystemPlugin: Plugin = {
       // Truncate if too long
       if (memberList.length > 1024) {
         memberList = memberList.substring(0, 1000) + `\n...and ${members.length - 10} more`;
-      }
-    }
-    
-    // Format creation date
-    const createdAt = new Date(faction.created_at);
-    const createdDate = createdAt.toLocaleDateString();
-    
-    // Send faction info
-    if ('send' in message.channel) {
-      await message.channel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(`${faction.emoji} ${faction.name}`)
-            .setDescription(faction.description)
-            .setColor(faction.color)
-            .addFields(
-              { name: 'Leader', value: `<@${faction.leader_id}>`, inline: true },
-              { name: 'Members', value: `${faction.member_count}`, inline: true },
-              { name: 'Power', value: `${faction.power}`, inline: true },
-              { name: 'Created', value: createdDate, inline: true },
-              { name: 'Member List', value: memberList }
-            )
-            .setFooter({ text: `Faction ID: ${faction.id}` })
-            .setTimestamp()
-        ]
-      });
-    }
-  },
   
   // Handle list factions command
   async handleListFactions(message: Message): Promise<void> {
@@ -763,30 +752,44 @@ const factionSystemPlugin: Plugin = {
             .setTimestamp()
         ]
       });
-    }
-  },
-  
   // Handle faction help command
   async handleFactionHelp(message: Message): Promise<void> {
-    if ('send' in message.channel) {
-      await message.channel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle('🏛️ Faction System Commands')
-            .setDescription('Here are the available faction commands:')
-            .setColor(Colors.Blue)
-            .addFields(
-              { name: '!faction create <name> [description]', value: 'Create a new faction', inline: false },
-              { name: '!faction join <name>', value: 'Join an existing faction', inline: false },
-              { name: '!faction leave', value: 'Leave your current faction', inline: false },
-              { name: '!faction info [name]', value: 'View info about a faction or your own faction', inline: false },
-              { name: '!faction list', value: 'List all factions', inline: false },
-              { name: '!faction help', value: 'Show this help message', inline: false }
-            )
-            .setFooter({ text: 'Catalyst Faction System Plugin' })
-            .setTimestamp()
-        ]
-      });
+    const helpEmbed = new EmbedBuilder()
+      .setTitle('Faction Commands')
+      .setDescription('Here are the available faction commands:')
+      .addFields(
+        { name: '!faction create <name> <emoji>', value: 'Create a new faction' },
+        { name: '!faction join <name>', value: 'Join an existing faction' },
+        { name: '!faction leave', value: 'Leave your current faction' },
+        { name: '!faction info [name]', value: 'Get info about a faction' },
+        { name: '!factions', value: 'List all factions' }
+      )
+      .setColor(Colors.Blue);
+      
+    await message.channel.send({ embeds: [helpEmbed] });
+  },
+  
+  // Handle faction command routing
+  async handleFactionCommand(message: Message, args: string[]): Promise<void> {
+    if (args.length === 0) {
+      return this.handleFactionHelp(message);
+    }
+    
+    const subcommand = args[0].toLowerCase();
+    const subcommandArgs = args.slice(1);
+    
+    switch (subcommand) {
+      case 'create':
+        return this.handleCreateFaction(message, subcommandArgs);
+      case 'join':
+        return this.handleJoinFaction(message, subcommandArgs);
+      case 'leave':
+        return this.handleLeaveFaction(message, subcommandArgs);
+      case 'info':
+        return this.handleFactionInfo(message, subcommandArgs);
+      case 'help':
+      default:
+        return this.handleFactionHelp(message);
     }
   }
 };

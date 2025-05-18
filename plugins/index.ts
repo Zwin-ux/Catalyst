@@ -4,105 +4,201 @@
  * Provides a modular architecture for extending bot functionality
  */
 
-import { Client, Message, Interaction } from 'discord.js';
+import { Client, Message, Interaction, Collection } from 'discord.js';
 import { CONFIG } from '../config';
+import { WorldStateManager } from '../core/worldState';
+import { CatalystPlugin, PluginManager } from './pluginManager';
 
-// Plugin interface
-export interface Plugin {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
+// Re-export plugin types for convenience
+export { CatalystPlugin } from './pluginManager';
+
+export interface Plugin extends Omit<CatalystPlugin, 'onLoad'> {
   enabled: boolean;
-  
-  // Lifecycle methods
-  onLoad?: (client: Client) => Promise<void>;
-  onUnload?: () => Promise<void>;
-  
-  // Event handlers
-  onMessage?: (message: Message) => Promise<void>;
-  onInteraction?: (interaction: Interaction) => Promise<void>;
-  
-  // Command registration
-  commands?: string[];
-  
-  // Plugin configuration
   config?: Record<string, any>;
   
-  // Allow plugins to have custom properties and methods
-  [key: string]: any;
+  // Override onLoad to include the plugin registry
+  onLoad?(registry: PluginRegistry): Promise<void> | void;
+  
+  // Additional plugin methods
+  onUnload?(): Promise<void> | void;
+  onMessage?(message: Message): Promise<void> | void;
+  onInteraction?(interaction: Interaction): Promise<void> | void;
+  onButtonClick?(interaction: any): Promise<void> | void;
+  onSlashCommand?(interaction: any): Promise<void> | void;
+  onReactionAdd?(reaction: any, user: any): Promise<void> | void;
 }
 
-// Plugin registry
+/**
+ * Plugin registry - manages loading and unloading of plugins
+ */
 class PluginRegistry {
   private plugins: Map<string, Plugin> = new Map();
-  private client: Client | null = null;
+  private pluginManager: PluginManager;
+  private worldState: WorldStateManager;
   
-  constructor() {}
+  constructor() {
+    this.worldState = new WorldStateManager();
+    this.pluginManager = new PluginManager(this.worldState);
+  }
   
   /**
-   * Set the Discord client for the plugin system
+   * Initialize the plugin system
    */
-  setClient(client: Client) {
-    this.client = client;
-    console.log('Plugin system initialized with Discord client');
+  async initialize(): Promise<void> {
+    try {
+      // Load all plugins from the plugins directory
+      await this.pluginManager.loadAllPlugins();
+      
+      // Register loaded plugins with our registry
+      for (const plugin of this.pluginManager.getAllPlugins()) {
+        // Skip already registered plugins
+        if (this.plugins.has(plugin.id)) {
+          continue;
+        }
+        
+        // Create a wrapper that adapts the plugin to our Plugin interface
+        const wrapper: Plugin = {
+          ...plugin,
+          enabled: true,
+          config: {},
+          onLoad: async () => {
+            if (plugin.onLoad) {
+              await plugin.onLoad(this.pluginManager);
+            }
+          }
+        };
+        
+        // Register the wrapper
+        this.plugins.set(plugin.id, wrapper);
+      }
+      
+      console.log('[PluginSystem] Initialized plugin system');
+    } catch (error) {
+      console.error('[PluginSystem] Failed to initialize plugin system:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get the world state manager
+   */
+  getWorldState(): WorldStateManager {
+    return this.worldState;
+  }
+  
+  /**
+   * Get the plugin manager
+   */
+  getPluginManager(): PluginManager {
+    return this.pluginManager;
   }
   
   /**
    * Register a new plugin
    */
   async registerPlugin(plugin: Plugin): Promise<boolean> {
-    if (this.plugins.has(plugin.id)) {
-      console.warn(`Plugin with ID ${plugin.id} is already registered`);
-      return false;
-    }
-    
-    this.plugins.set(plugin.id, plugin);
-    console.log(`Registered plugin: ${plugin.name} (${plugin.id}) v${plugin.version}`);
-    
-    // Initialize plugin if client is available and plugin is enabled
-    if (this.client && plugin.enabled && plugin.onLoad) {
-      try {
-        await plugin.onLoad(this.client);
-        console.log(`Loaded plugin: ${plugin.name}`);
-      } catch (error) {
-        console.error(`Error loading plugin ${plugin.name}:`, error);
+    try {
+      // Skip if already registered
+      if (this.plugins.has(plugin.id)) {
+        console.warn(`[PluginSystem] Plugin ${plugin.id} is already registered`);
         return false;
       }
+      
+      // Create a wrapper that adapts the plugin to the CatalystPlugin interface
+      const wrapper: CatalystPlugin = {
+        id: plugin.id,
+        name: plugin.name,
+        description: plugin.description,
+        version: plugin.version,
+        author: plugin.author || 'Unknown',
+        requires: plugin.requires,
+        dependencies: plugin.dependencies,
+        
+        // Wrap lifecycle methods to maintain context
+        onLoad: async (manager: PluginManager) => {
+          if (plugin.onLoad) {
+            await plugin.onLoad(this);
+          }
+        },
+        
+        onUnload: plugin.onUnload,
+        onMessage: plugin.onMessage,
+        onReactionAdd: plugin.onReactionAdd,
+        onButtonClick: plugin.onButtonClick,
+        onSlashCommand: plugin.onSlashCommand
+      };
+      
+      // Register with the plugin manager
+      await this.pluginManager.loadPlugin(plugin.id);
+      
+      // Store in our registry
+      this.plugins.set(plugin.id, {
+        ...wrapper,
+        enabled: true,
+        config: plugin.config || {}
+      });
+      
+      console.log(`[PluginSystem] Registered plugin: ${plugin.name} v${plugin.version}`);
+      return true;
+    } catch (error) {
+      console.error(`[PluginSystem] Failed to register plugin ${plugin.id}:`, error);
+      return false;
     }
-    
-    return true;
   }
   
   /**
    * Unregister a plugin by ID
    */
   async unregisterPlugin(pluginId: string): Promise<boolean> {
+    try {
+      await this.pluginManager.unloadPlugin(pluginId);
+      this.plugins.delete(pluginId);
+      console.log(`[PluginSystem] Unregistered plugin: ${pluginId}`);
+      return true;
+    } catch (error) {
+      console.error(`[PluginSystem] Failed to unregister plugin ${pluginId}:`, error);
+      return false;
+    }
+  }
+  
+  /**
+   * Enable a plugin by ID
+   */
+  async enablePlugin(pluginId: string): Promise<boolean> {
     const plugin = this.plugins.get(pluginId);
     if (!plugin) {
-      console.warn(`Plugin with ID ${pluginId} is not registered`);
+      console.warn(`[PluginSystem] Cannot enable non-existent plugin: ${pluginId}`);
       return false;
     }
     
-    // Call unload handler if available
-    if (plugin.onUnload) {
-      try {
-        await plugin.onUnload();
-      } catch (error) {
-        console.error(`Error unloading plugin ${plugin.name}:`, error);
-      }
+    if (plugin.enabled) {
+      return true; // Already enabled
     }
     
-    this.plugins.delete(pluginId);
-    console.log(`Unregistered plugin: ${plugin.name}`);
+    plugin.enabled = true;
+    console.log(`[PluginSystem] Enabled plugin: ${plugin.name}`);
+    return true;
+  }
+  
+  /**
+   * Disable a plugin by ID
+   */
+  async disablePlugin(pluginId: string): Promise<boolean> {
+    const plugin = this.plugins.get(pluginId);
+    if (!plugin || !plugin.enabled) {
+      return false;
+    }
+    
+    plugin.enabled = false;
+    console.log(`[PluginSystem] Disabled plugin: ${plugin.name}`);
     return true;
   }
   
   /**
    * Get a plugin by ID
    */
-  getPlugin(pluginId: string): Plugin | undefined {
-    return this.plugins.get(pluginId);
+  getPlugin<T extends Plugin = Plugin>(pluginId: string): T | undefined {
+    return this.plugins.get(pluginId) as T | undefined;
   }
   
   /**
@@ -116,82 +212,17 @@ class PluginRegistry {
    * Get all enabled plugins
    */
   getEnabledPlugins(): Plugin[] {
-    return Array.from(this.plugins.values()).filter(plugin => plugin.enabled);
-  }
-  
-  /**
-   * Enable a plugin by ID
-   */
-  async enablePlugin(pluginId: string): Promise<boolean> {
-    const plugin = this.plugins.get(pluginId);
-    if (!plugin) {
-      console.warn(`Plugin with ID ${pluginId} is not registered`);
-      return false;
-    }
-    
-    if (plugin.enabled) {
-      console.warn(`Plugin ${plugin.name} is already enabled`);
-      return true;
-    }
-    
-    plugin.enabled = true;
-    
-    // Call load handler if client is available
-    if (this.client && plugin.onLoad) {
-      try {
-        await plugin.onLoad(this.client);
-        console.log(`Enabled plugin: ${plugin.name}`);
-      } catch (error) {
-        console.error(`Error enabling plugin ${plugin.name}:`, error);
-        plugin.enabled = false;
-        return false;
-      }
-    }
-    
-    return true;
-  }
-  
-  /**
-   * Disable a plugin by ID
-   */
-  async disablePlugin(pluginId: string): Promise<boolean> {
-    const plugin = this.plugins.get(pluginId);
-    if (!plugin) {
-      console.warn(`Plugin with ID ${pluginId} is not registered`);
-      return false;
-    }
-    
-    if (!plugin.enabled) {
-      console.warn(`Plugin ${plugin.name} is already disabled`);
-      return true;
-    }
-    
-    // Call unload handler if available
-    if (plugin.onUnload) {
-      try {
-        await plugin.onUnload();
-      } catch (error) {
-        console.error(`Error disabling plugin ${plugin.name}:`, error);
-      }
-    }
-    
-    plugin.enabled = false;
-    console.log(`Disabled plugin: ${plugin.name}`);
-    return true;
+    return this.getAllPlugins().filter(plugin => plugin.enabled);
   }
   
   /**
    * Handle a message event for all enabled plugins
    */
   async handleMessage(message: Message): Promise<void> {
-    for (const plugin of this.getEnabledPlugins()) {
-      if (plugin.onMessage) {
-        try {
-          await plugin.onMessage(message);
-        } catch (error) {
-          console.error(`Error in plugin ${plugin.name} message handler:`, error);
-        }
-      }
+    try {
+      await this.pluginManager.emit('message', message);
+    } catch (error) {
+      console.error('[PluginSystem] Error in handleMessage:', error);
     }
   }
   
@@ -199,19 +230,60 @@ class PluginRegistry {
    * Handle an interaction event for all enabled plugins
    */
   async handleInteraction(interaction: Interaction): Promise<void> {
-    for (const plugin of this.getEnabledPlugins()) {
-      if (plugin.onInteraction) {
-        try {
-          await plugin.onInteraction(interaction);
-        } catch (error) {
-          console.error(`Error in plugin ${plugin.name} interaction handler:`, error);
-        }
+    try {
+      if (interaction.isButton()) {
+        await this.pluginManager.emit('buttonClick', interaction);
+      } else if (interaction.isCommand()) {
+        await this.pluginManager.emit('slashCommand', interaction);
       }
+    } catch (error) {
+      console.error('[PluginSystem] Error in handleInteraction:', error);
     }
+  }
+  
+  /**
+   * Handle a reaction add event for all enabled plugins
+   */
+  async handleReactionAdd(reaction: any, user: any): Promise<void> {
+    try {
+      await this.pluginManager.emit('reactionAdd', reaction, user);
+    } catch (error) {
+      console.error('[PluginSystem] Error in handleReactionAdd:', error);
+    }
+  }
+  
+  /**
+   * Clean up resources
+   */
+  async destroy(): Promise<void> {
+    // Unload all plugins
+    for (const plugin of this.plugins.values()) {
+      await this.unregisterPlugin(plugin.id);
+    }
+    
+    // Clean up world state
+    await this.worldState.destroy();
   }
 }
 
 // Create and export singleton instance
 export const pluginRegistry = new PluginRegistry();
+
+// Initialize the plugin system when this module is loaded
+pluginRegistry.initialize().catch(error => {
+  console.error('Failed to initialize plugin system:', error);
+  process.exit(1);
+});
+
+// Clean up on process exit
+process.on('SIGINT', async () => {
+  await pluginRegistry.destroy();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await pluginRegistry.destroy();
+  process.exit(0);
+});
 
 export default pluginRegistry;
