@@ -74,7 +74,13 @@ export class FactionSystemPlugin implements Plugin {
     // Initialize commands
     this.commands = {
       'faction': this.handleFactionCommand.bind(this),
-      'factions': this.handleFactionCommand.bind(this)
+      'factions': async (message: Message, args: string[]) => {
+        if (!this.ready || !this.client || !message.guild) return;
+        if (args.length > 0) {
+          return this.handleFactionCommand(message, ['list', ...args]);
+        }
+        return this.handleListFactions(message);
+      }
     };
   }
 

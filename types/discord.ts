@@ -1,0 +1,15 @@
+export type {
+  Client,
+  Message,
+  EmbedBuilder,
+  TextChannel,
+  GuildMember,
+  Role,
+  Channel,
+  ChannelType,
+  VoiceChannel,
+  CategoryChannel,
+  MessageReaction,
+  Interaction,
+  Collection,
+} from 'discord.js';

@@ -4,7 +4,8 @@
  * Enables users to create, join, and manage factions within the server
  */
 
-import { Client, Message, EmbedBuilder, Colors, TextChannel, GuildMember, Role, Channel } from 'discord.js';
+import { EmbedBuilder, Colors } from 'discord.js';
+import type { Client, Message, TextChannel, GuildMember, Role, Channel } from '../../types/discord';
 import { Plugin } from '../index';
 import { CONFIG } from '../../config';
 import { supabase } from '../../db';
@@ -774,7 +775,7 @@ const factionSystemPlugin: FactionSystemPlugin = {
       await (message.channel as TextChannel).send({
         embeds: [
           new EmbedBuilder()
-            .setTitle('🏛️ Factions')
+            .setTitle('Factions')
             .setDescription(`Here are the current factions:\n\n${factionList}`)
             .setColor(Colors.Blue)
             .setFooter({ text: 'Use !faction join <name> to join a faction' })

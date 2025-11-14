@@ -29,7 +29,8 @@
 
 
 ## Verification Log
-- 2024-XX-XX `npm run build` – failed because of existing TypeScript errors in `plugins/faction-system/index.ts`.
+- 2025-11-14 `npm run build` – ✅ TypeScript project compilation finished cleanly, validating shared plugin typings and personality modules.
+- 2025-11-14 `npm run test` – ✅ Jest suite passed (6 tests), covering faction command routing and faction listing responses.
 
 ## Next Steps
 - **Fix all remaining TypeScript errors and lint issues.**
