@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { trackVoiceTime, voteContribution, calculateKing } from '../services/pointsService';
 
 const router = Router();
 
 // POST /points/voice
-router.post('/voice', async (req, res) => {
+router.post('/voice', async (req: Request, res: Response) => {
   const { userId, seconds } = req.body;
   if (!userId || typeof seconds !== 'number') {
     return res.status(400).json({ error: 'Missing userId or seconds' });
@@ -14,7 +14,7 @@ router.post('/voice', async (req, res) => {
 });
 
 // POST /points/vote
-router.post('/vote', async (req, res) => {
+router.post('/vote', async (req: Request, res: Response) => {
   const { voterId, targetId } = req.body;
   if (!voterId || !targetId) {
     return res.status(400).json({ error: 'Missing voterId or targetId' });
@@ -24,7 +24,7 @@ router.post('/vote', async (req, res) => {
 });
 
 // GET /points/king?start=timestamp
-router.get('/king', async (req, res) => {
+router.get('/king', async (req: Request, res: Response) => {
   const { start } = req.query;
   if (!start) {
     return res.status(400).json({ error: 'Missing period start' });

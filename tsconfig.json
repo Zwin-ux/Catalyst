@@ -24,5 +24,10 @@
     "core/**/*",
     "plugins/**/*"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "plugins/**/node_modules",
+    "plugins/**/dist",
+    "plugins/**/src"
+  ]
 }

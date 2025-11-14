@@ -4,12 +4,15 @@
  * Enables users to create, join, and manage factions within the server
  */
 
-import { Client, Message, EmbedBuilder, Colors, TextChannel, GuildMember, Role } from 'discord.js';
+import { Client, Message, EmbedBuilder, Colors, TextChannel, GuildMember, Role, Channel } from 'discord.js';
 import { Plugin } from '../index';
-import { isTextChannelWithSend } from '../../utils/discord-helpers';
 import { CONFIG } from '../../config';
 import { supabase } from '../../db';
 import { v4 as uuidv4 } from 'uuid';
+
+function canSendToChannel(channel: Channel | null | undefined): channel is TextChannel {
+  return !!channel && typeof (channel as TextChannel).send === 'function';
+}
 
 // Faction interface
 interface Faction {
@@ -83,19 +86,17 @@ const factionSystemPlugin: FactionSystemPlugin = {
         c.isTextBased() && 'name' in c && c.name === 'general'
       ) as TextChannel | undefined;
       
-      if (channel && isTextChannelWithSend(channel)) {
-        if ('send' in channel) {
-          await channel.send({
-            embeds: [
-              new EmbedBuilder()
-                .setTitle('🏛️ Faction System Activated')
-                .setDescription('The Faction System is now active! Use `!faction help` to see available commands.')
-                .setColor(Colors.Blue)
-                .setFooter({ text: 'Catalyst Faction System Plugin' })
-                .setTimestamp()
-            ]
-          });
-        }
+      if (canSendToChannel(channel)) {
+        await channel.send({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle('🏛️ Faction System Activated')
+              .setDescription('The Faction System is now active! Use `!faction help` to see available commands.')
+              .setColor(Colors.Blue)
+              .setFooter({ text: 'Catalyst Faction System Plugin' })
+              .setTimestamp()
+          ]
+        });
       }
     }
   },
@@ -274,7 +275,7 @@ const factionSystemPlugin: FactionSystemPlugin = {
         });
         
         // Send welcome message
-        if (factionChannel && isTextChannelWithSend(factionChannel)) {
+        if (canSendToChannel(factionChannel)) {
           await factionChannel.send({
             embeds: [
               new EmbedBuilder()
@@ -311,7 +312,7 @@ const factionSystemPlugin: FactionSystemPlugin = {
         });
         
         // Send welcome message
-        if (factionChannel && isTextChannelWithSend(factionChannel)) {
+        if (canSendToChannel(factionChannel)) {
           await factionChannel.send({
             embeds: [
               new EmbedBuilder()
@@ -335,7 +336,7 @@ const factionSystemPlugin: FactionSystemPlugin = {
         c.isTextBased() && 'name' in c && c.name === 'general'
       ) as TextChannel | undefined;
       
-      if (announceChannel && isTextChannelWithSend(announceChannel)) {
+      if (canSendToChannel(announceChannel)) {
         await announceChannel.send({
           embeds: [
             new EmbedBuilder()
@@ -494,7 +495,7 @@ const factionSystemPlugin: FactionSystemPlugin = {
         c.isTextBased() && 'name' in c && c.name === `faction-${faction.name.toLowerCase().replace(/\s+/g, '-')}`
       ) as TextChannel | undefined;
       
-      if (factionChannel && isTextChannelWithSend(factionChannel)) {
+      if (canSendToChannel(factionChannel)) {
         await factionChannel.send({
           embeds: [
             new EmbedBuilder()
@@ -609,7 +610,7 @@ const factionSystemPlugin: FactionSystemPlugin = {
         c.isTextBased() && 'name' in c && c.name === `faction-${factionName.toLowerCase().replace(/\s+/g, '-')}`
       ) as TextChannel | undefined;
       
-      if (factionChannel && isTextChannelWithSend(factionChannel)) {
+      if (canSendToChannel(factionChannel)) {
         await factionChannel.send({
           embeds: [
             new EmbedBuilder()
@@ -710,39 +711,67 @@ const factionSystemPlugin: FactionSystemPlugin = {
       memberList = members
         .map(m => `<@${m.user_id}>${m.role === 'leader' ? ' (Leader)' : ''}`)
         .join('\n');
-      
+
       // Truncate if too long
       if (memberList.length > 1024) {
-        memberList = memberList.substring(0, 1000) + `\n...and ${members.length - 10} more`;
-  
+        memberList = memberList.substring(0, 1000) + `\n...and ${Math.max(0, members.length - 10)} more`;
+      }
+    }
+
+    const factionEmbed = new EmbedBuilder()
+      .setTitle(`${faction.emoji} ${faction.name}`)
+      .setDescription(faction.description || 'No description provided.')
+      .addFields(
+        { name: 'Leader', value: `<@${faction.leader_id}>`, inline: true },
+        { name: 'Members', value: `${faction.member_count}`, inline: true },
+        { name: 'Power', value: `${faction.power}`, inline: true },
+        { name: 'Members List', value: memberList }
+      )
+      .setColor(faction.color ?? Colors.Blue)
+      .setFooter({ text: `Created ${new Date(faction.created_at).toLocaleDateString()}` })
+      .setTimestamp();
+
+    if (canSendToChannel(message.channel as Channel)) {
+      await (message.channel as TextChannel).send({ embeds: [factionEmbed] });
+    } else {
+      await message.reply({ embeds: [factionEmbed] }).catch(() => undefined);
+    }
+  },
+
   // Handle list factions command
   async handleListFactions(message: Message): Promise<void> {
-    // Get all factions
-    if (!supabase) throw new Error('Supabase client not initialized');
+    if (!supabase) {
+      console.error('[Faction System] Supabase client not initialized');
+      await message.reply('An error occurred while fetching factions. Please try again later.');
+      return;
+    }
+
     const { data: factions, error } = await supabase
       .from('factions')
       .select('*')
       .order('member_count', { ascending: false });
-    
+
     if (error) {
       console.error('[Faction System] Error fetching factions:', error);
       await message.reply('An error occurred while fetching factions. Please try again later.');
       return;
     }
-    
+
     if (!factions || factions.length === 0) {
       await message.reply('No factions have been created yet. Use `!faction create <name> [description]` to create one!');
       return;
     }
-    
-    // Format faction list
-    const factionList = factions.map(f => 
-      `${f.emoji} **${f.name}** - ${f.member_count} members, ${f.power} power\n*${f.description.substring(0, 50)}${f.description.length > 50 ? '...' : ''}*`
-    ).join('\n\n');
-    
-    // Send faction list
-    if ('send' in message.channel) {
-      await message.channel.send({
+
+    const factionList = factions
+      .map(f => {
+        const description = f.description || 'No description provided.';
+        const truncatedDescription = description.length > 50 ? `${description.substring(0, 50)}...` : description;
+        return `${f.emoji} **${f.name}** - ${f.member_count} members, ${f.power} power\n*${truncatedDescription}*`;
+      })
+      .join('\n\n');
+
+    if (canSendToChannel(message.channel as Channel)) {
+      await (message.channel as TextChannel).send({
         embeds: [
           new EmbedBuilder()
             .setTitle('🏛️ Factions')
@@ -752,6 +781,9 @@ const factionSystemPlugin: FactionSystemPlugin = {
             .setTimestamp()
         ]
       });
+    }
+  },
+
   // Handle faction help command
   async handleFactionHelp(message: Message): Promise<void> {
     const helpEmbed = new EmbedBuilder()
@@ -765,31 +797,42 @@ const factionSystemPlugin: FactionSystemPlugin = {
         { name: '!factions', value: 'List all factions' }
       )
       .setColor(Colors.Blue);
-      
-    await message.channel.send({ embeds: [helpEmbed] });
+
+    if (canSendToChannel(message.channel as Channel)) {
+      await (message.channel as TextChannel).send({ embeds: [helpEmbed] });
+    }
   },
-  
+
   // Handle faction command routing
   async handleFactionCommand(message: Message, args: string[]): Promise<void> {
     if (args.length === 0) {
-      return this.handleFactionHelp(message);
+      await this.handleFactionHelp(message);
+      return;
     }
-    
+
     const subcommand = args[0].toLowerCase();
     const subcommandArgs = args.slice(1);
-    
+
     switch (subcommand) {
       case 'create':
-        return this.handleCreateFaction(message, subcommandArgs);
+        await this.handleCreateFaction(message, subcommandArgs);
+        break;
       case 'join':
-        return this.handleJoinFaction(message, subcommandArgs);
+        await this.handleJoinFaction(message, subcommandArgs);
+        break;
       case 'leave':
-        return this.handleLeaveFaction(message, subcommandArgs);
+        await this.handleLeaveFaction(message, subcommandArgs);
+        break;
       case 'info':
-        return this.handleFactionInfo(message, subcommandArgs);
+        await this.handleFactionInfo(message, subcommandArgs);
+        break;
+      case 'list':
+        await this.handleListFactions(message);
+        break;
       case 'help':
       default:
-        return this.handleFactionHelp(message);
+        await this.handleFactionHelp(message);
+        break;
     }
   }
 };
