@@ -10,7 +10,26 @@ CREATE TABLE IF NOT EXISTS users (
   factionId TEXT,
   roleHistory JSONB DEFAULT '[]'::jsonb,
   lastActive TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  traits JSONB DEFAULT '[]'::jsonb,
+  traits JSONB DEFAULT jsonb_build_object(
+    'core', jsonb_build_object(
+      'chaos', 0.5,
+      'cooperation', 0.5,
+      'performative', 0.5,
+      'loyalty', 0.5,
+      'saltiness', 0.5
+    ),
+    'style', jsonb_build_object(
+      'emojiSpeak', 0.3,
+      'capslock', 0.3,
+      'essayMode', 0.3,
+      'clown', 0.3
+    ),
+    'stability', jsonb_build_object(
+      'volatility', 0.4,
+      'dramaHalfLifeHours', 24
+    ),
+    'lastUpdate', to_char(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  ),
   badges JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -29,6 +48,13 @@ CREATE TABLE IF NOT EXISTS factions (
   rivalFactionIds JSONB DEFAULT '[]'::jsonb,
   allyFactionIds JSONB DEFAULT '[]'::jsonb,
   dramaWins INTEGER DEFAULT 0,
+  traits JSONB DEFAULT jsonb_build_object(
+    'chaos', 0.5,
+    'cooperation', 0.5,
+    'performative', 0.5,
+    'entropy', 0.5,
+    'lastUpdate', to_char(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  ),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -36,6 +62,9 @@ CREATE TABLE IF NOT EXISTS factions (
 CREATE TABLE IF NOT EXISTS drama_events (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
+  actorId TEXT,
+  initiatorId TEXT,
+  targetIds JSONB DEFAULT '[]'::jsonb,
   participants JSONB DEFAULT '[]'::jsonb,
   factions JSONB DEFAULT '[]'::jsonb,
   trigger TEXT,

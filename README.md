@@ -28,8 +28,8 @@
 - Positive, community-focused design: All mechanics encourage creativity, collaboration, and fun rather than competition or negativity.
 
 
-
-
+## Verification Log
+- 2024-XX-XX `npm run build` – failed because of existing TypeScript errors in `plugins/faction-system/index.ts`.
 
 ## Next Steps
 - **Fix all remaining TypeScript errors and lint issues.**

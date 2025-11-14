@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { User, Faction, DramaEvent } from './models';
 import { CONFIG } from '../config';
+import { createDefaultTraits, createDefaultFactionTraits } from '../types/personality';
 
 // Import credentials from config.ts file
 const supabaseUrl = CONFIG.SUPABASE_URL;
@@ -81,17 +82,30 @@ export async function updateUser(userId: string, data: Partial<User>): Promise<b
 
 export async function saveUser(user: User): Promise<boolean> {
   if (!supabase) return false;
-  
+
   const { error } = await supabase
     .from('users')
     .upsert(user, { onConflict: 'id' });
-  
+
   if (error) {
     console.error('Error saving user:', error);
     return false;
   }
-  
+
   return true;
+}
+
+export async function getAllUsers(): Promise<User[]> {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.from('users').select('*');
+
+  if (error) {
+    console.error('Error fetching all users:', error);
+    return [];
+  }
+
+  return (data ?? []) as User[];
 }
 
 // Faction operations
@@ -208,19 +222,53 @@ export async function updateDramaEvent(event: DramaEvent): Promise<boolean> {
 
 export async function getRecentDramaEvents(limit: number = 10): Promise<DramaEvent[]> {
   if (!supabase) return [];
-  
+
   const { data, error } = await supabase
     .from('drama_events')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit);
-  
+
   if (error) {
     console.error('Error fetching recent drama events:', error);
     return [];
   }
-  
+
   return data as DramaEvent[];
+}
+
+export async function getDramaEventById(eventId: string): Promise<DramaEvent | null> {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('drama_events')
+    .select('*')
+    .eq('id', eventId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching drama event by id:', error);
+    return null;
+  }
+
+  return data as DramaEvent;
+}
+
+export async function getDramaEventsSince(since: Date): Promise<DramaEvent[]> {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('drama_events')
+    .select('*')
+    .gte('created_at', since.toISOString())
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching drama events since timestamp:', error);
+    return [];
+  }
+
+  return (data ?? []) as DramaEvent[];
 }
 
 // Fallback storage for development/testing without Supabase
@@ -240,21 +288,46 @@ const localStore: LocalStore = {
 
 // Fallback implementations when Supabase is not available
 export async function getLocalUser(userId: string): Promise<User | null> {
-  return localStore.users.get(userId) || null;
+  const user = localStore.users.get(userId);
+  if (!user) return null;
+  if (!user.traits) {
+    user.traits = createDefaultTraits();
+  }
+  return user;
 }
 
 export async function saveLocalUser(user: User): Promise<boolean> {
-  localStore.users.set(user.id, user);
+  const record = {
+    ...user,
+    traits: user.traits ?? createDefaultTraits(),
+  };
+  localStore.users.set(record.id, record);
   return true;
+}
+
+export async function getLocalAllUsers(): Promise<User[]> {
+  return Array.from(localStore.users.values());
 }
 
 export async function getLocalFaction(factionId: string): Promise<Faction | null> {
-  return localStore.factions.get(factionId) || null;
+  const faction = localStore.factions.get(factionId) || null;
+  if (faction && !faction.traits) {
+    faction.traits = createDefaultFactionTraits();
+  }
+  return faction;
 }
 
 export async function saveLocalFaction(faction: Faction): Promise<boolean> {
-  localStore.factions.set(faction.id, faction);
+  const record = {
+    ...faction,
+    traits: faction.traits ?? createDefaultFactionTraits(),
+  };
+  localStore.factions.set(record.id, record);
   return true;
+}
+
+export async function getLocalDramaEventById(eventId: string): Promise<DramaEvent | null> {
+  return localStore.dramaEvents.get(eventId) ?? null;
 }
 
 export async function logLocalDramaEvent(event: DramaEvent): Promise<boolean> {
@@ -265,7 +338,7 @@ export async function logLocalDramaEvent(event: DramaEvent): Promise<boolean> {
       // Ensure timestamp is a Date object
       timestamp: event.timestamp instanceof Date ? event.timestamp : new Date(event.timestamp)
     };
-    
+
     localStore.dramaEvents.set(dramaEvent.id, dramaEvent);
     localStore.lastEventId++;
     return true;
@@ -282,11 +355,19 @@ export async function getLocalRecentDramaEvents(limit: number = 10): Promise<Dra
     .slice(0, limit);
 }
 
+export async function getLocalDramaEventsSince(since: Date): Promise<DramaEvent[]> {
+  return Array.from(localStore.dramaEvents.values()).filter(event => {
+    const created = event.created_at ? new Date(event.created_at).getTime() : event.timestamp.getTime();
+    return created >= since.getTime();
+  });
+}
+
 // Export unified functions that try Supabase first, then fall back to local
 export const db = {
   // User operations
   getUser: supabase ? getUser : getLocalUser,
   saveUser: supabase ? saveUser : saveLocalUser,
+  getAllUsers: supabase ? getAllUsers : getLocalAllUsers,
   updateUser: supabase ? updateUser : async (userId: string, data: Partial<User>) => {
     const user = await getLocalUser(userId);
     if (!user) return false;
@@ -314,6 +395,8 @@ export const db = {
   // Drama event operations
   logDramaEvent: supabase ? logDramaEvent : logLocalDramaEvent,
   getRecentDramaEvents: supabase ? getRecentDramaEvents : getLocalRecentDramaEvents,
+  getDramaEventById: supabase ? getDramaEventById : getLocalDramaEventById,
+  getDramaEventsSince: supabase ? getDramaEventsSince : getLocalDramaEventsSince,
   updateDramaEvent: supabase ? updateDramaEvent : async (event: DramaEvent) => {
     try {
       // Ensure we're working with a proper DramaEvent object
