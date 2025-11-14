@@ -8,15 +8,40 @@ import { Client, Message, EmbedBuilder, Colors, TextChannel, GuildMember, Role, 
 import { eventCapture } from '../../core/eventCapture';
 import { Plugin } from '../index';
 import { CONFIG } from '../../config';
-import { isTextChannelWithSend } from '../../utils/discord-helpers';
 import { supabase } from '../../db';
 
+interface ServerControlConfig {
+  chaosLevel: number;
+  lastReorganization: number;
+  reorgCooldown: number;
+  maxChannels: number;
+  minChannels: number;
+  factionTerritories: Map<string, string>;
+}
+
+interface ServerControlPlugin extends Plugin {
+  config?: ServerControlConfig;
+  updateChaosLevel(message: Message): void;
+  calculateDramaScore(message: Message): number;
+  shouldReorganizeServer(): boolean;
+  reorganizeServer(guild: Guild): Promise<void>;
+  createFactionTerritories(guild: Guild): Promise<void>;
+  restructureRoleHierarchy(guild: Guild): Promise<void>;
+  updateChannelPermissions(guild: Guild): Promise<void>;
+  initializeServerStructure(guild: Guild): Promise<void>;
+}
+
+function canSendToChannel(channel: Channel | null | undefined): channel is TextChannel {
+  return !!channel && typeof (channel as TextChannel).send === 'function';
+}
+
 // Server Control Plugin
-const serverControlPlugin: Plugin = {
+const serverControlPlugin: ServerControlPlugin = {
   id: 'server-control',
   name: 'Server Control',
   description: 'Provides dynamic server manipulation based on drama and faction activity',
   version: '1.0.0',
+  author: 'Catalyst Team',
   enabled: true,
   
   // Plugin state
@@ -30,13 +55,19 @@ const serverControlPlugin: Plugin = {
   },
   
   // Initialize plugin
-  async onLoad(client: Client): Promise<void> {
+  async onLoad(registry: any): Promise<void> {
     console.log('[Server Control] Plugin loaded');
-    
-    // Create initial server structure
-    const guild = client.guilds.cache.first();
-    if (!guild) return;
-    
+
+    const pluginManager = typeof registry?.getPluginManager === 'function'
+      ? registry.getPluginManager()
+      : undefined;
+    const client = (pluginManager as unknown as { client?: Client })?.client;
+    const guild = client?.guilds.cache.first();
+    if (!guild) {
+      console.warn('[Server Control] No guild available during onLoad, skipping initial setup');
+      return;
+    }
+
     await this.initializeServerStructure(guild);
   },
   
@@ -48,7 +79,7 @@ const serverControlPlugin: Plugin = {
     this.updateChaosLevel(message);
     
     // Check if server reorganization is needed
-    if (this.shouldReorganizeServer()) {
+    if (this.shouldReorganizeServer() && message.guild) {
       await this.reorganizeServer(message.guild);
     }
   },
@@ -135,7 +166,7 @@ const serverControlPlugin: Plugin = {
         c.isTextBased() && 'name' in c && c.name === 'general'
       ) as TextChannel | undefined;
       
-      if (generalChannel && isTextChannelWithSend(generalChannel)) {
+      if (canSendToChannel(generalChannel)) {
         await generalChannel.send({
           embeds: [
             new EmbedBuilder()

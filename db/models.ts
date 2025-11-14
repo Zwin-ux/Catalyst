@@ -1,5 +1,6 @@
 // Database Models
 // Defines the structure for Users, Factions, DramaEvents, etc.
+import { PersonalityTraits, FactionTraits } from '../types/personality';
 
 export interface User {
   id: string;                  // Discord user ID
@@ -7,9 +8,9 @@ export interface User {
   dramaPoints: number;         // Points accumulated from drama
   karma: number;               // Positive/negative reputation
   factionId: string | null;    // ID of the faction they belong to
-  roleHistory: string[];       // Special roles they've had 
+  roleHistory: string[];       // Special roles they've had
   lastActive: string;          // ISO timestamp of last activity
-  traits: string[];            // Special character traits
+  traits: PersonalityTraits;   // Personality profile traits
   badges: UserBadge[];         // Achievement badges
   created_at?: string;         // When the record was created
 }
@@ -34,14 +35,18 @@ export interface Faction {
   rivalFactionIds: string[];   // Factions they're in conflict with
   allyFactionIds: string[];    // Factions they're allied with
   dramaWins: number;           // Number of drama events won
+  traits: FactionTraits;       // Collective personality footprint
   created_at?: string;         // When the faction was created
 }
 
 export interface DramaEvent {
   id: string;                  // Unique identifier
   type: DramaEventType;        // Category of drama event
-  participants: string[];      // Discord IDs of involved users 
+  participants: string[];      // Discord IDs of involved users
   factions: string[];          // Faction IDs involved
+  actorId?: string;            // Primary instigator, if known
+  initiatorId?: string;        // Alternate instigator field
+  targetIds?: string[];        // Array of targets affected
   trigger: string;             // What caused this event
   description: string;         // Human-readable description
   score: number;               // Intensity/impact score

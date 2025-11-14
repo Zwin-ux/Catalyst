@@ -28,8 +28,9 @@
 - Positive, community-focused design: All mechanics encourage creativity, collaboration, and fun rather than competition or negativity.
 
 
-
-
+## Verification Log
+- 2025-11-14 `npm run build` – ✅ TypeScript project compilation finished cleanly, validating shared plugin typings and personality modules.
+- 2025-11-14 `npm run test` – ✅ Jest suite passed (6 tests), covering faction command routing and faction listing responses.
 
 ## Next Steps
 - **Fix all remaining TypeScript errors and lint issues.**

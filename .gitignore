@@ -19,6 +19,9 @@ Thumbs.db
 # Build output
 dist/
 build/
+# Transpiled artifacts at repository root
+/*.js
+/*.d.ts
 
 # TypeScript
 *.tsbuildinfo

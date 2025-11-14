@@ -104,39 +104,21 @@ class PluginRegistry {
         return false;
       }
       
-      // Create a wrapper that adapts the plugin to the CatalystPlugin interface
-      const wrapper: CatalystPlugin = {
-        id: plugin.id,
-        name: plugin.name,
-        description: plugin.description,
-        version: plugin.version,
-        author: plugin.author || 'Unknown',
-        requires: plugin.requires,
-        dependencies: plugin.dependencies,
-        
-        // Wrap lifecycle methods to maintain context
-        onLoad: async (manager: PluginManager) => {
+      // Register with the plugin manager
+      await this.pluginManager.loadPlugin(plugin.id);
+
+      const registeredPlugin: Plugin = {
+        ...plugin,
+        enabled: true,
+        config: plugin.config || {},
+        onLoad: async (registry: PluginRegistry) => {
           if (plugin.onLoad) {
             await plugin.onLoad(this);
           }
-        },
-        
-        onUnload: plugin.onUnload,
-        onMessage: plugin.onMessage,
-        onReactionAdd: plugin.onReactionAdd,
-        onButtonClick: plugin.onButtonClick,
-        onSlashCommand: plugin.onSlashCommand
+        }
       };
-      
-      // Register with the plugin manager
-      await this.pluginManager.loadPlugin(plugin.id);
-      
-      // Store in our registry
-      this.plugins.set(plugin.id, {
-        ...wrapper,
-        enabled: true,
-        config: plugin.config || {}
-      });
+
+      this.plugins.set(plugin.id, registeredPlugin);
       
       console.log(`[PluginSystem] Registered plugin: ${plugin.name} v${plugin.version}`);
       return true;

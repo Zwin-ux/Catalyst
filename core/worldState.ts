@@ -3,10 +3,26 @@ import { v4 as uuidv4 } from 'uuid';
 import { User, Faction, DramaEvent } from '../db/models';
 import { db } from '../db';
 import { Logger } from '../src/utils/logger';
+import { createDefaultTraits, createDefaultFactionTraits } from '../types/personality';
+import { applyEventToUserTraits, personalityConfig } from '../src/core/personalityEngine';
+import { buildPersonaPromptForUser } from '../src/core/personaPrompt';
 import { WorldState } from './types/worldState';
 
 // Cache TTL in milliseconds (5 minutes)
 const CACHE_TTL = 5 * 60 * 1000;
+const NARRATOR_USER_ID = 'npc:narrator';
+const BIG_EVENT_THRESHOLD = 70;
+
+function buildWorldSummaryForEvent(event: DramaEvent): string {
+  const description = event.description || 'A drama event unfolded.';
+  const participants = (event.participants || []).filter(Boolean);
+  const factions = (event.factions || []).filter(Boolean);
+  const participantText = participants.length ? `Participants: ${participants.join(', ')}.` : '';
+  const factionText = factions.length ? ` Factions: ${factions.join(', ')}.` : '';
+  const scoreText = typeof event.score === 'number' ? ` Score: ${event.score}.` : '';
+
+  return `${description.trim()}${scoreText} ${participantText}${factionText}`.trim();
+}
 
 interface CacheEntry<T> {
   data: T;
@@ -210,6 +226,9 @@ export class WorldStateManager implements WorldState {
     try {
       const dbUser = await db.getUser(userId);
       if (dbUser) {
+        if (!dbUser.traits) {
+          dbUser.traits = createDefaultTraits();
+        }
         this.users.set(userId, dbUser);
         this.setCache(cacheKey, dbUser);
         return dbUser;
@@ -233,10 +252,10 @@ export class WorldStateManager implements WorldState {
         factionId: null,
         roleHistory: [],
         lastActive: new Date().toISOString(),
-        traits: [],
+        traits: createDefaultTraits(),
         badges: []
       };
-      
+
       await db.saveUser(user);
       this.users.set(userId, user);
     }
@@ -285,6 +304,9 @@ export class WorldStateManager implements WorldState {
     try {
       const dbFaction = await db.getFaction(factionId);
       if (dbFaction) {
+        if (!dbFaction.traits) {
+          dbFaction.traits = createDefaultFactionTraits();
+        }
         this.factions.set(factionId, dbFaction);
         this.setCache(cacheKey, dbFaction);
         return dbFaction;
@@ -313,6 +335,7 @@ export class WorldStateManager implements WorldState {
       rivalFactionIds: [],
       allyFactionIds: [],
       dramaWins: 0,
+      traits: createDefaultFactionTraits(),
       created_at: now
     };
     
@@ -390,7 +413,15 @@ export class WorldStateManager implements WorldState {
     
     await db.logDramaEvent(newEvent);
     this.events.set(newEvent.id, newEvent);
-    
+
+    if (personalityConfig.enabled) {
+      try {
+        await applyEventToUserTraits(newEvent.id);
+      } catch (error) {
+        this.logger.warn(`Failed to apply personality delta for event ${newEvent.id}:`, error);
+      }
+    }
+
     // Update last event for participants
     for (const userId of newEvent.participants) {
       const user = await this.getUser(userId);
@@ -399,7 +430,21 @@ export class WorldStateManager implements WorldState {
         await this.updateUser(user);
       }
     }
-    
+
+    if (personalityConfig.enabled && typeof newEvent.score === 'number' && newEvent.score >= BIG_EVENT_THRESHOLD) {
+      try {
+        const worldSummary = buildWorldSummaryForEvent(newEvent);
+        const personaPrompt = await buildPersonaPromptForUser(NARRATOR_USER_ID, {
+          displayName: 'The Narrator',
+          role: 'npc',
+          worldSummary,
+        });
+        this.logger.debug(`Narrator persona prompt for event ${newEvent.id}: ${personaPrompt}`);
+      } catch (error) {
+        this.logger.warn(`Failed to build narrator persona prompt for event ${newEvent.id}:`, error);
+      }
+    }
+
     // Update last event for factions
     for (const factionId of newEvent.factions) {
       const faction = await this.getFaction(factionId);
