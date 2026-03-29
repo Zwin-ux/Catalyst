@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import pool from '../utils/db';
 
 export async function trackVoiceTime(userId: string, seconds: number): Promise<number> {
@@ -19,7 +19,7 @@ export async function trackVoiceTime(userId: string, seconds: number): Promise<n
     await pool.query(
       `INSERT INTO point_events (id, user_id, type, points, timestamp)
        VALUES ($1, $2, $3, $4, NOW())`,
-      [uuidv4(), userId, 'voiceTime', toAward]
+      [randomUUID(), userId, 'voiceTime', toAward]
     );
   }
   return toAward;
@@ -29,7 +29,7 @@ export async function voteContribution(voterId: string, targetId: string): Promi
   await pool.query(
     `INSERT INTO point_events (id, user_id, type, points, timestamp)
      VALUES ($1, $2, $3, $4, NOW())`,
-    [uuidv4(), targetId, 'vote', 2]
+    [randomUUID(), targetId, 'vote', 2]
   );
   return 2;
 }

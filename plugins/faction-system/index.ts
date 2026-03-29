@@ -9,7 +9,7 @@ import type { Client, Message, TextChannel, GuildMember, Role, Channel } from '.
 import { Plugin } from '../index';
 import { CONFIG } from '../../config';
 import { supabase } from '../../db';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 function canSendToChannel(channel: Channel | null | undefined): channel is TextChannel {
   return !!channel && typeof (channel as TextChannel).send === 'function';
@@ -189,7 +189,7 @@ const factionSystemPlugin: FactionSystemPlugin = {
     }
     
     // Create faction in database
-    const factionId = uuidv4();
+    const factionId = randomUUID();
     const factionColor = Math.floor(Math.random() * 0xFFFFFF);
     const factionEmoji = ['⚔️', '🛡️', '🏹', '🔮', '🧙', '🧝', '🧟', '🧞', '🦁', '🐉', '🐺', '🦊'][Math.floor(Math.random() * 12)];
     

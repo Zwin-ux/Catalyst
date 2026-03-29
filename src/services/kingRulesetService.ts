@@ -1,9 +1,9 @@
 import pool from '../utils/db';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { KingRuleset } from '../models/KingRuleset';
 
 export async function createKingRuleset(ruleset: Omit<KingRuleset, 'id'>): Promise<KingRuleset> {
-  const id = uuidv4();
+  const id = randomUUID();
   await pool.query(
     `INSERT INTO king_rulesets (id, name, window_minutes, metric, reward_type, reward_value, announcement, eligible_role, min_participation)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,

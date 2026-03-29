@@ -7,7 +7,7 @@
 
 import { Message } from 'discord.js';
 import { DramaEvent, DramaEventType } from '../db/models';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { isTextChannelWithSend } from '../utils/discord-helpers';
 import { eventCapture } from './eventCapture';
 
@@ -180,7 +180,7 @@ export class DramaAnalytics {
     description: string
   ): DramaEvent {
     return {
-      id: uuidv4(),
+      id: randomUUID(),
       type,
       participants,
       factions,

@@ -1,5 +1,5 @@
 import { Collection } from 'discord.js';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { User, Faction, DramaEvent } from '../db/models';
 import { db } from '../db';
 import { Logger } from '../src/utils/logger';
@@ -319,7 +319,7 @@ export class WorldStateManager implements WorldState {
   }
 
   async createFaction(name: string, creatorId: string, description: string = ''): Promise<Faction> {
-    const id = `faction_${uuidv4()}`;
+    const id = `faction_${randomUUID()}`;
     const now = new Date().toISOString();
     
     const faction: Faction = {
@@ -405,7 +405,7 @@ export class WorldStateManager implements WorldState {
     const timestamp = new Date();
     const newEvent: DramaEvent = {
       ...event,
-      id: `event_${uuidv4()}`,
+      id: `event_${randomUUID()}`,
       timestamp: timestamp,
       resolved: false,
       created_at: timestamp.toISOString()
