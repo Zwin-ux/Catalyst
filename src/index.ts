@@ -13,6 +13,7 @@ import leaderboardRouter from './routes/leaderboard';
 import { createCatalystRouter } from './routes/catalyst';
 import { Logger } from './utils/logger';
 import { closeDatabase, hasDatabaseConnection } from './utils/db';
+import { renderLandingPage } from './web/landing';
 
 const app = express();
 const logger = new Logger('CatalystRuntime');
@@ -23,6 +24,18 @@ let shuttingDown = false;
 
 app.use(cors());
 app.use(express.json());
+
+app.get('/', async (req: any, res: any) => {
+  res.contentType('text/html; charset=utf-8');
+  res.status(200).send(
+    renderLandingPage({
+      host: req.headers.host || 'localhost',
+      discordStatus: discordClient?.isReady() ? 'ready' : 'disabled-or-starting',
+      persistence: hasDatabaseConnection() ? 'postgres' : 'json',
+      timestamp: new Date().toISOString(),
+    }),
+  );
+});
 
 app.get('/health', async (_req: Request, res: Response) => {
   res.status(200).json({
