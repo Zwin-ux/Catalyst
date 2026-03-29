@@ -3,4 +3,5 @@ export const appConfig = {
   discordToken: process.env.DISCORD_BOT_TOKEN || '',
   discordApplicationId: process.env.DISCORD_APPLICATION_ID || '',
   discordDevGuildId: process.env.DISCORD_DEV_GUILD_ID || '',
+  publicBaseUrl: process.env.PUBLIC_BASE_URL || '',
 };

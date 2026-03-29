@@ -1,8 +1,10 @@
 export interface LandingPageInput {
   host: string;
+  baseUrl: string;
   discordStatus: string;
   persistence: string;
   timestamp: string;
+  installReady: boolean;
 }
 
 function badge(label: string, value: string): string {
@@ -15,8 +17,14 @@ function badge(label: string, value: string): string {
 }
 
 export function renderLandingPage(input: LandingPageInput): string {
-  const healthUrl = `https://${input.host}/health`;
-  const apiUrl = `https://${input.host}/catalyst/health`;
+  const healthUrl = `${input.baseUrl}/health`;
+  const apiUrl = `${input.baseUrl}/catalyst/health`;
+  const installButton = input.installReady
+    ? `<a class="primary" href="/invite">Install to Discord</a>`
+    : `<span class="muted-pill">Set DISCORD_APPLICATION_ID to enable install links</span>`;
+  const inviteStatus = input.installReady
+    ? `<span class="success">302 Redirect</span>`
+    : `<span class="warn">503 Install Disabled</span>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -211,6 +219,17 @@ export function renderLandingPage(input: LandingPageInput): string {
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
       }
 
+      .muted-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 18px;
+        border-radius: 999px;
+        color: var(--muted);
+        border: 1px dashed rgba(122, 153, 197, 0.18);
+        background: rgba(14, 20, 30, 0.7);
+      }
+
       .terminal {
         margin-top: 18px;
         padding: 16px;
@@ -267,9 +286,9 @@ export function renderLandingPage(input: LandingPageInput): string {
             ${badge('Host', input.host)}
           </div>
           <div class="actions">
-            <a class="primary" href="/health">Open Health</a>
+            ${installButton}
+            <a href="/health">Open Health</a>
             <a href="/catalyst/health">Catalyst Health</a>
-            <a href="/catalyst/health">API Status</a>
           </div>
         </article>
 
@@ -287,6 +306,7 @@ export function renderLandingPage(input: LandingPageInput): string {
       <section class="terminal" aria-label="terminal status">
         <div><span class="prompt">GET</span> <span class="path">/health</span> <span class="success">200 OK</span></div>
         <div><span class="prompt">GET</span> <span class="path">/catalyst/health</span> <span class="success">200 OK</span></div>
+        <div><span class="prompt">GET</span> <span class="path">/invite</span> ${inviteStatus}</div>
         <div><span class="prompt">MODE</span> <span class="path">discord-native hosted app</span></div>
         <div><span class="prompt">NOTE</span> <span class="warn">This domain is intentionally minimal. The real UX is in Discord.</span></div>
         <div><span class="prompt">CHECK</span> <span class="path">${healthUrl}</span></div>

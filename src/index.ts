@@ -4,9 +4,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 import type { Server } from 'http';
 import type { Request, Response } from 'express';
-
 import { CatalystService } from './catalyst';
 import { appConfig } from './config/appConfig';
+import { buildDiscordInstallUrl } from './discord/install';
 import { startCatalystDiscord } from './discord/runtime';
 import pointsRouter from './routes/points';
 import leaderboardRouter from './routes/leaderboard';
@@ -26,15 +26,38 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', async (req: any, res: any) => {
+  const forwardedProto = typeof req.headers['x-forwarded-proto'] === 'string'
+    ? req.headers['x-forwarded-proto'].split(',')[0].trim()
+    : undefined;
+  const protocol = forwardedProto || req.protocol || 'http';
+  const host = req.headers.host || `localhost:${appConfig.port}`;
+  const baseUrl = appConfig.publicBaseUrl || `${protocol}://${host}`;
+
   res.contentType('text/html; charset=utf-8');
   res.status(200).send(
     renderLandingPage({
-      host: req.headers.host || 'localhost',
+      host,
+      baseUrl,
       discordStatus: discordClient?.isReady() ? 'ready' : 'disabled-or-starting',
       persistence: hasDatabaseConnection() ? 'postgres' : 'json',
       timestamp: new Date().toISOString(),
+      installReady: Boolean(appConfig.discordApplicationId),
     }),
   );
+});
+
+app.get('/invite', async (_req: Request, res: any) => {
+  if (!appConfig.discordApplicationId) {
+    res.status(503).json({
+      ok: false,
+      error: 'DISCORD_APPLICATION_ID is not configured yet.',
+    });
+    return;
+  }
+
+  res.status(302);
+  res.setHeader('Location', buildDiscordInstallUrl(appConfig.discordApplicationId));
+  res.end();
 });
 
 app.get('/health', async (_req: Request, res: Response) => {

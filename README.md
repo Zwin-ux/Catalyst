@@ -39,6 +39,7 @@ Member:
 Discord app tools:
 
 - `Summarize From Here` message context command
+- `/invite` web route for install flow handoff
 
 ## Product Principles
 
@@ -73,6 +74,7 @@ If Discord credentials are not present, the HTTP service still runs and the host
 ## API Surface
 
 - `GET /health`
+- `GET /invite`
 - `GET /catalyst/health`
 - `GET /catalyst/guilds/:guildId`
 - `GET /catalyst/guilds/:guildId/leaderboard`

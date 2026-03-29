@@ -51,7 +51,7 @@ Railway will detect [railway.toml](railway.toml) and use:
 
 - `npm run build`
 - `npm run db:setup`
-- `node dist/index.js`
+- `node dist/src/index.js`
 - `GET /health`
 
 ## 3. Set Variables
@@ -119,6 +119,7 @@ Catalyst now leans on explicit Discord app surfaces:
 - buttons for season join and board actions
 - message context command for targeted channel summarization
 - channel history fetch for summaries
+- `/invite` route for clean web-to-Discord install handoff
 
 This keeps the app closer to Discord’s interaction model and avoids building around privileged ambient scraping.
 
