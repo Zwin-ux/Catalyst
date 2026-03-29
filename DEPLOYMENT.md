@@ -1,150 +1,150 @@
-# Catalyst Discord Bot: Deployment Guide
+# Catalyst Deployment Guide
 
-This guide will walk you through the process of deploying the Catalyst Discord bot for beta testing.
+This repo is now prepared for Railway-first deployment.
 
-## Prerequisites
+The target shape is:
 
-Before you begin, make sure you have:
+- one Railway app service for Catalyst
+- one Railway Postgres service for persistent state
+- one Discord application installed to guilds with slash commands, buttons, and message context actions
 
-1. Node.js v16.9.0 or higher installed
-2. A Discord account with the ability to create applications
-3. A Supabase account for the database (free tier is sufficient)
+## What Railway Handles Well Here
 
-## Step 1: Create a Discord Application
+- `PORT`-based HTTP boot for the hosted API
+- pre-deploy database setup
+- healthcheck-driven deploy validation
+- restart policy and graceful rollouts
+- internal Postgres wiring through `DATABASE_URL`
 
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application" and give it a name (e.g., "Catalyst Bot")
-3. Navigate to the "Bot" tab and click "Add Bot"
-4. Under the "Privileged Gateway Intents" section, enable:
-   - Presence Intent
-   - Server Members Intent
-   - Message Content Intent
-5. Click "Reset Token" to generate a new bot token
-6. Copy the token - you'll need it for the configuration
+The repo encodes that in [railway.toml](railway.toml).
 
-## Step 2: Set Up Supabase
+## 1. Create the Discord App
 
-1. Go to [Supabase](https://supabase.com/) and create a new project
-2. Once your project is created, go to the "Settings" > "API" page
-3. Copy the "URL" and "service_role key" (not the anon key)
-4. You'll need these for the configuration
+In the Discord Developer Portal:
 
-## Step 3: Configure the Bot
+1. Create a new application.
+2. Add a bot user.
+3. Copy the application id and bot token.
+4. On the Installation page, enable guild install.
+5. Use the Discord-provided install link or a custom OAuth2 link with:
+   - `bot`
+   - `applications.commands`
+6. Set bot permissions conservatively to start:
+   - View Channels
+   - Send Messages
+   - Embed Links
+   - Read Message History
+   - Use Slash Commands
 
-1. Create a `.env` file in the root directory of the project with the following content:
+Catalyst does not need Message Content Intent for the summary flow in this setup. The app uses explicit command access plus channel history fetches.
 
-```
-DISCORD_BOT_TOKEN=your_discord_bot_token
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_service_role_key
-BOT_PREFIX=!
-```
+## 2. Create the Railway Services
 
-2. Replace the placeholders with your actual values
+In Railway:
 
-## Step 4: Initialize the Database
+1. Create a new project.
+2. Add a Postgres service.
+3. Add a GitHub-backed service pointing at this repo.
+4. Set the root service to the app codebase.
 
-1. Run the database initialization script:
+Railway will detect [railway.toml](railway.toml) and use:
 
-```bash
-npm run init-db
-```
+- `npm run build`
+- `npm run db:setup`
+- `node dist/index.js`
+- `GET /health`
 
-This will create all the necessary tables in your Supabase database.
+## 3. Set Variables
 
-## Step 5: Invite the Bot to Your Server
+Set these variables on the Catalyst service:
 
-1. Go back to the [Discord Developer Portal](https://discord.com/developers/applications)
-2. Select your application
-3. Navigate to the "OAuth2" > "URL Generator" tab
-4. Select the following scopes:
-   - bot
-   - applications.commands
-5. Select the following bot permissions:
-   - Administrator (for testing purposes; you can refine this later)
-6. Copy the generated URL and open it in your browser
-7. Select the server you want to add the bot to and click "Authorize"
+- `DISCORD_BOT_TOKEN`
+- `DISCORD_APPLICATION_ID`
+- `DATABASE_URL`
+- `DISCORD_DEV_GUILD_ID`
+  Use this in development/staging for fast guild-scoped command registration.
 
-## Step 6: Start the Bot
+Optional:
 
-1. Install dependencies:
+- `PORT`
+- `POSTGRES_URL`
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
+- `CATALYST_STATE_FILE`
+  Only matters for non-database local fallback.
 
-```bash
-npm install
-```
+For Railway production, `DATABASE_URL` is the important one.
 
-2. Build the TypeScript code:
+## 4. Database Setup
 
-```bash
-npm run build
-```
-
-3. Start the bot:
+The pre-deploy command runs:
 
 ```bash
-npm start
+npm run db:setup
 ```
 
-## Testing the Bot
+That script:
 
-Once the bot is running, you can test it with the following commands:
+- applies [db/schema.sql](db/schema.sql)
+- creates the `catalyst_runtime_state` table used by the hosted runtime
+- seeds the default state row if needed
 
-- `!help` - View all available commands
-- `!status` - Check bot status and connection information
-- `!faction create <name> [description]` - Create a new faction
-- `!faction join <name>` - Join an existing faction
-- `!faction leave` - Leave your current faction
-- `!faction info [name]` - View info about a faction or your own faction
-- `!faction list` - List all factions
+You can also run it manually:
 
-## Monitoring and Troubleshooting
+```bash
+npm run db:setup
+```
 
-- Check the console output for any errors or warnings
-- The bot will log important events to the console
-- If the bot disconnects, check your internet connection and Discord's status
+## 5. First Boot Checklist
 
-## Beta Testing Checklist
+After deploy:
 
-During beta testing, focus on these key areas:
+1. Open the Railway logs and confirm the app is listening on `PORT`.
+2. Hit `/health` and confirm a `200` response.
+3. Confirm persistence shows as `postgres` in the health payload.
+4. Install the Discord app into a test guild.
+5. Run:
+   - `/setup`
+   - `/season start`
+   - `/announce`
+   - `/join`
+   - `/summary channel`
+   - `Summarize From Here`
 
-1. **Core Functionality**
-   - Command handling
-   - Event detection
-   - Drama scoring
+## 6. Discord App Features in This Repo
 
-2. **User Experience**
-   - Command responsiveness
-   - Clarity of messages
-   - Ease of use
+Catalyst now leans on explicit Discord app surfaces:
 
-3. **Stability**
-   - Uptime
-   - Error handling
-   - Resource usage
+- slash commands for setup, seasons, profile, and board flows
+- buttons for season join and board actions
+- message context command for targeted channel summarization
+- channel history fetch for summaries
 
-4. **Security**
-   - Permission handling
-   - Data storage
-   - API usage
+This keeps the app closer to Discord’s interaction model and avoids building around privileged ambient scraping.
 
-## Reporting Issues
+## 7. Recommended Railway Production Setup
 
-When reporting issues, please include:
+- one replica to start
+- Postgres attached before first real deploy
+- healthcheck path: `/health`
+- restart policy: `ON_FAILURE`
+- keep a dedicated staging guild via `DISCORD_DEV_GUILD_ID`
+- use Railway logs plus Discord test guilds for smoke testing every deploy
 
-1. A description of what happened
-2. Steps to reproduce the issue
-3. Any error messages from the console
-4. The expected behavior
+## 8. Smoke Test Script
 
-## Next Steps After Beta
+Before marking a Railway deploy good:
 
-After successful beta testing, consider:
+1. `GET /health` returns `ok: true`
+2. `/setup` works in a test guild
+3. `/season start` posts a usable season flow
+4. `/join` creates a member profile
+5. `/summary channel` returns a sane digest
+6. `Summarize From Here` works on a selected message
+7. `/optout` cleanly exits the season
 
-1. Refining permissions to use the principle of least privilege
-2. Setting up a production hosting environment
-3. Implementing automated backups for the database
-4. Adding monitoring and alerting
+## 9. Notes
 
----
-
-Happy testing! The Catalyst bot is designed to evolve with your community, so your feedback during beta testing is invaluable.
+- Local JSON state is still available for development when no database is configured.
+- Railway production should use Postgres-backed state.
+- Summary commands rely on command-triggered history access, not Message Content Intent.

@@ -1,55 +1,120 @@
-# Catalyst Discord Gamification Engine
+# Catalyst Runtime Guide
 
-**Catalyst** is a modular, fully interactive Discord bot engine for gamifying voice and text communities. It features dynamic channel management, emoji voting, interactive modals for settings, plugin proposals, drama timeline analytics, and more. Designed for community-driven play, minimal commands, and maximum fun.
+## Positioning
 
----
+Catalyst is a hosted Discord season service for creator and fandom communities.
 
-## Features
-- **Dynamic Channels**: Auto-create/fetch/delete modular channels (`hub`, `config`, `powers`, `mods`, `timeline`).
-- **Emoji Voting**: Add emoji voting to any event, plugin proposal, or drama post. Results are posted in-channel.
-- **Interactive Modals**: Change settings (role name, server size, vote thresholds) using Discord modals in the `config` channel.
-- **Plugin Proposals**: Propose/vote on new features or mechanics in `mods`.
-- **Drama Timeline & Analytics**: All major events and changes are logged to `timeline` for transparency and analytics.
-- **No Slash Commands Needed**: All gameplay and settings are managed via channel UIs, buttons, and modals.
+The current product loop is:
 
-## Tech Stack
-- Node.js + TypeScript
-- discord.js
-- PostgreSQL (for persistent storage)
-- node-fetch
+- admins configure the room with `/setup`
+- members explicitly opt in with `/join`
+- crews build momentum through rituals and board movement
+- moderators and members can summarize the room on demand
+- anyone can leave with `/optout`
 
-## Quick Start
-1. Clone the repo: `git clone https://github.com/Zwin-ux/Catalyst.git`
-2. Install dependencies: `npm install`
-3. Copy `.env.example` to `.env` and fill in your config.
-4. Start dev server: `npm run dev`
+## Runtime Shape
 
-## Environment Variables
-- `DISCORD_BOT_TOKEN` - Your Discord bot token
-- `SOVEREIGN_ROLE_NAME` - Name for the Sovereign role
-- `ANNOUNCE_CHANNEL` - Channel for announcements
-- `POINTS_API` - API URL for points management
-- `SOVEREIGN_PROMPT` - Prompt for new Sovereign
-- `SERVER_SIZE` - Server size (small, medium, large)
+The canonical runtime is the `src/` tree.
 
-## Project Structure
-- `/bot` - Discord bot logic (TypeScript)
-- `/src` - API, models, and backend logic
-- `/docs` - Design docs and planning
+- [`src/index.ts`](../src/index.ts) boots HTTP, health, shutdown handling, and the Discord runtime.
+- [`src/catalyst/service.ts`](../src/catalyst/service.ts) owns guild setup, seasons, consent, crews, and summaries.
+- [`src/catalyst/store.ts`](../src/catalyst/store.ts) chooses Postgres-backed state when `DATABASE_URL` exists and falls back to JSON for local development.
+- [`src/discord/runtime.ts`](../src/discord/runtime.ts) registers slash commands, message context actions, and button flows.
+- [`src/discord/presenters.ts`](../src/discord/presenters.ts) defines the control-deck embed language.
+- [`src/discord/summaries.ts`](../src/discord/summaries.ts) builds Discord-native channel summaries from command-triggered history access.
 
-## Major Functions & Utilities
-- `ensureEngineChannel(guild, name, topic)`: Ensure a channel exists
-- `deleteEngineChannel(guild, name)`: Delete a channel
-- `addEmojiVoting(channel, messageId, emojis, onFinish)`: Emoji voting utility
-- `setEngineConfig(options)`: Update engine config
+Legacy directories like `bot/`, `commands/`, `actions/`, and parts of `plugins/` still exist, but they are not the primary v1 runtime path.
 
-## TODO
-- [ ] Interactive settings modals in `config`
-- [ ] Final lint/type cleanup
+## Discord App Surfaces
 
-## Repository
-[https://github.com/Zwin-ux/Catalyst](https://github.com/Zwin-ux/Catalyst)
+Admin:
 
----
+- `/setup`
+- `/settings`
+- `/season start`
+- `/season end`
+- `/announce`
 
-This project is designed for extensibility, community engagement, and visual gameplay. For feature requests, issues, or contributions, open a PR or issue on GitHub.
+Member:
+
+- `/join`
+- `/optout`
+- `/profile`
+- `/leaderboard`
+- `/summary channel`
+- `/summary season`
+
+Context action:
+
+- `Summarize From Here`
+
+This setup deliberately leans on Discord interactions and channel-history fetches instead of building around Message Content Intent.
+
+## Data Model
+
+The hosted flow is built around:
+
+- guild installations
+- seasons
+- season memberships
+- consent records
+- season events
+- season summaries
+
+For Railway production, state should live in Postgres through `DATABASE_URL`.
+For local development, the fallback store uses `CATALYST_STATE_FILE` and defaults to `./data/catalyst-state.json`.
+
+## API Endpoints
+
+- `GET /health`
+- `GET /catalyst/health`
+- `GET /catalyst/guilds/:guildId`
+- `GET /catalyst/guilds/:guildId/leaderboard`
+
+## Railway Notes
+
+The repo now includes [railway.toml](../railway.toml), which sets:
+
+- build command
+- pre-deploy database setup
+- start command
+- healthcheck path
+- restart policy
+- deploy teardown overlap and drain timing
+
+The database setup entrypoint is [scripts/setup-db.js](../scripts/setup-db.js).
+
+## Environment
+
+Create a `.env` file from [`.env.example`](../.env.example).
+
+Required for Discord runtime:
+
+- `DISCORD_BOT_TOKEN`
+- `DISCORD_APPLICATION_ID`
+
+Recommended for Railway:
+
+- `DATABASE_URL`
+- `DISCORD_DEV_GUILD_ID` for a staging guild during fast iteration
+
+Optional:
+
+- `POSTGRES_URL`
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
+- `CATALYST_STATE_FILE`
+
+## Verification Commands
+
+- `npm run build`
+- `npm test -- --runInBand`
+- `npm run db:setup`
+
+## Immediate Next Shipping Tasks
+
+- add weekly ritual scheduling and streak refresh
+- add richer season recaps and multi-surface summaries
+- move from single JSON-runtime fallback toward fuller normalized Postgres persistence
+- continue retiring unused legacy bot paths
+- replace placeholder visual assets with polished control-deck artwork

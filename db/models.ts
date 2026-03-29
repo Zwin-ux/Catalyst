@@ -75,3 +75,80 @@ export interface WorldState {
   events: DramaEvent[];            // Recent drama events
   lastUpdated: string;             // ISO timestamp
 }
+
+export interface GuildInstallation {
+  guildId: string;
+  guildName: string;
+  installState: 'draft' | 'ready';
+  announceChannelId?: string;
+  consentCopy: string;
+  quietHours: string;
+  theme: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SeasonCrew {
+  id: string;
+  name: string;
+  color: string;
+  description: string;
+  memberIds: string[];
+  points: number;
+}
+
+export interface SeasonRecord {
+  id: string;
+  guildId: string;
+  name: string;
+  week: number;
+  status: 'draft' | 'active' | 'completed';
+  crews: SeasonCrew[];
+  createdAt?: string;
+  startedAt?: string;
+  endedAt?: string;
+  joinMessageId?: string;
+}
+
+export interface SeasonMembership {
+  id: string;
+  guildId: string;
+  seasonId: string;
+  userId: string;
+  displayName: string;
+  crewId: string;
+  consentedAt: string;
+  optedOutAt?: string;
+  score: number;
+  streak: number;
+}
+
+export interface ConsentRecord {
+  id: string;
+  guildId: string;
+  seasonId: string;
+  userId: string;
+  status: 'granted' | 'withdrawn';
+  copy: string;
+  updatedAt: string;
+}
+
+export interface SeasonEventRecord {
+  id: string;
+  guildId: string;
+  seasonId: string;
+  type: string;
+  actorId?: string;
+  crewId?: string;
+  summary: string;
+  createdAt: string;
+}
+
+export interface SeasonSummary {
+  id: string;
+  guildId: string;
+  seasonId: string;
+  headline: string;
+  body: string;
+  createdAt: string;
+}

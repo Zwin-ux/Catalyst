@@ -1,13 +1,15 @@
 {
-  "name": "discord-voice-gamification",
-  "version": "0.1.0",
+  "name": "catalyst-season-service",
+  "version": "0.2.0",
+  "description": "Hosted Discord season engine for creator and fandom communities.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "dev": "ts-node-dev src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "db:init": "npx ts-node scripts/init-db.ts",
+    "db:init": "node scripts/setup-db.js",
+    "db:setup": "node scripts/setup-db.js",
     "db:migrate": "echo 'Add migration logic here'",
     "db:reset": "echo 'Add DB reset logic here'",
     "test": "jest",

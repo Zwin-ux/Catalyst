@@ -109,3 +109,89 @@ CREATE TRIGGER update_user_last_active
 BEFORE UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION update_last_active();
+
+-- Hosted Catalyst guild installations
+CREATE TABLE IF NOT EXISTS guild_installations (
+  guild_id TEXT PRIMARY KEY,
+  guild_name TEXT NOT NULL,
+  install_state TEXT NOT NULL DEFAULT 'draft',
+  announce_channel_id TEXT,
+  consent_copy TEXT NOT NULL,
+  quiet_hours TEXT NOT NULL DEFAULT '22:00-08:00',
+  theme TEXT NOT NULL DEFAULT 'Control Room',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Active and historical seasons
+CREATE TABLE IF NOT EXISTS seasons (
+  id TEXT PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  week INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'draft',
+  crews JSONB NOT NULL DEFAULT '[]'::jsonb,
+  join_message_id TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  started_at TIMESTAMP WITH TIME ZONE,
+  ended_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Explicit member participation in seasons
+CREATE TABLE IF NOT EXISTS season_memberships (
+  id TEXT PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  season_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  crew_id TEXT NOT NULL,
+  consented_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  opted_out_at TIMESTAMP WITH TIME ZONE,
+  score INTEGER NOT NULL DEFAULT 0,
+  streak INTEGER NOT NULL DEFAULT 0
+);
+
+-- Opt-in and opt-out record history
+CREATE TABLE IF NOT EXISTS consent_records (
+  id TEXT PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  season_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  copy TEXT NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Hosted season event feed
+CREATE TABLE IF NOT EXISTS season_events (
+  id TEXT PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  season_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  actor_id TEXT,
+  crew_id TEXT,
+  summary TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Recap and season summaries
+CREATE TABLE IF NOT EXISTS season_summaries (
+  id TEXT PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  season_id TEXT NOT NULL,
+  headline TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Runtime state snapshot for hosted deployment environments
+CREATE TABLE IF NOT EXISTS catalyst_runtime_state (
+  id TEXT PRIMARY KEY,
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_seasons_guild_status ON seasons(guild_id, status);
+CREATE INDEX IF NOT EXISTS idx_memberships_guild_season ON season_memberships(guild_id, season_id);
+CREATE INDEX IF NOT EXISTS idx_consent_records_guild_user ON consent_records(guild_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_season_events_guild_created ON season_events(guild_id, created_at DESC);
