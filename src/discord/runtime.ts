@@ -14,19 +14,22 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 
-import { CatalystService } from '../catalyst';
+import { CatalystService, listCatalystModules } from '../catalyst';
 import { appConfig } from '../config/appConfig';
 import { Logger } from '../utils/logger';
 import {
   buildChannelSummaryEmbed,
   buildJoinResultEmbed,
   buildLeaderboardEmbed,
+  buildModuleCatalogEmbed,
   buildProfileEmbed,
+  buildRitualPromptEmbed,
   buildSeasonAnnouncementActions,
   buildSeasonAnnouncementEmbed,
   buildSeasonSummaryEmbed,
   buildSetupEmbed,
 } from './presenters';
+import { composeRitualPrompt } from './rituals';
 import { SummaryCapableChannel, summarizeChannel } from './summaries';
 
 const logger = new Logger('CatalystDiscord');
@@ -78,6 +81,20 @@ const commandDefinitions = [
   new SlashCommandBuilder()
     .setName('announce')
     .setDescription('Post or re-post the season board in the announce channel.')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  new SlashCommandBuilder()
+    .setName('ritual')
+    .setDescription('Fire a high-signal prompt or inspect the Catalyst module rack.')
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('prompt')
+        .setDescription('Post a question-loop prompt into the current channel.'),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('modules')
+        .setDescription('See which Catalyst modules are live, beta, or next.'),
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
     .setName('summary')
@@ -330,6 +347,29 @@ async function handleSlashCommand(
       await interaction.reply({
         embeds: [buildJoinResultEmbed(result)],
         ephemeral: true,
+      });
+      return;
+    }
+    case 'ritual': {
+      const subcommand = interaction.options.getSubcommand();
+
+      if (subcommand === 'modules') {
+        await interaction.reply({
+          embeds: [buildModuleCatalogEmbed(listCatalystModules())],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const overview = await service.getGuildOverview(interaction.guildId);
+      const prompt = composeRitualPrompt({
+        guildName: interaction.guild.name,
+        theme: overview?.installation.theme,
+        seasonName: overview?.activeSeason?.name,
+      });
+
+      await interaction.reply({
+        embeds: [buildRitualPromptEmbed(prompt)],
       });
       return;
     }

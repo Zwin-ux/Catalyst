@@ -1,22 +1,12 @@
 # Catalyst Deployment Guide
 
-This repo is now prepared for Railway-first deployment.
+This repo is prepared for Railway-first deployment.
 
 The target shape is:
 
 - one Railway app service for Catalyst
 - one Railway Postgres service for persistent state
-- one Discord application installed to guilds with slash commands, buttons, and message context actions
-
-## What Railway Handles Well Here
-
-- `PORT`-based HTTP boot for the hosted API
-- pre-deploy database setup
-- healthcheck-driven deploy validation
-- restart policy and graceful rollouts
-- internal Postgres wiring through `DATABASE_URL`
-
-The repo encodes that in [railway.toml](railway.toml).
+- one Discord application installed to guilds with slash commands, buttons, ritual prompts, and message context actions
 
 ## 1. Create the Discord App
 
@@ -62,7 +52,9 @@ Set these variables on the Catalyst service:
 - `DISCORD_APPLICATION_ID`
 - `DATABASE_URL`
 - `DISCORD_DEV_GUILD_ID`
-  Use this in development/staging for fast guild-scoped command registration.
+  Use this in development or staging for fast guild-scoped command registration.
+- `PUBLIC_BASE_URL`
+  Set this to the Railway public URL so the hosted landing page renders canonical links cleanly.
 
 Optional:
 
@@ -102,11 +94,14 @@ After deploy:
 1. Open the Railway logs and confirm the app is listening on `PORT`.
 2. Hit `/health` and confirm a `200` response.
 3. Confirm persistence shows as `postgres` in the health payload.
-4. Install the Discord app into a test guild.
-5. Run:
+4. Open `/` and confirm the branded landing page renders instead of a raw Express error.
+5. Open `/catalyst/modules` and confirm the module rack manifest is live.
+6. Install the Discord app into a test guild.
+7. Run:
    - `/setup`
    - `/season start`
    - `/announce`
+   - `/ritual prompt`
    - `/join`
    - `/summary channel`
    - `Summarize From Here`
@@ -115,15 +110,31 @@ After deploy:
 
 Catalyst now leans on explicit Discord app surfaces:
 
-- slash commands for setup, seasons, profile, and board flows
+- slash commands for setup, seasons, profile, ritual, and board flows
+- ritual prompt command for restarting quiet rooms
 - buttons for season join and board actions
 - message context command for targeted channel summarization
 - channel history fetch for summaries
 - `/invite` route for clean web-to-Discord install handoff
 
-This keeps the app closer to Discord’s interaction model and avoids building around privileged ambient scraping.
+This keeps the app closer to Discord's interaction model and avoids building around privileged ambient scraping.
 
-## 7. Recommended Railway Production Setup
+## 7. Module Rack
+
+The product is now framed as a module rack instead of one monolithic bot.
+
+Current live and beta modules:
+
+- `season-board`
+- `channel-digest`
+- `question-loop`
+- `spotlight-drop`
+- `plugin-slots`
+- `showdown-engine`
+
+The source of truth is [src/catalyst/modules.ts](src/catalyst/modules.ts).
+
+## 8. Recommended Railway Production Setup
 
 - one replica to start
 - Postgres attached before first real deploy
@@ -132,20 +143,23 @@ This keeps the app closer to Discord’s interaction model and avoids building a
 - keep a dedicated staging guild via `DISCORD_DEV_GUILD_ID`
 - use Railway logs plus Discord test guilds for smoke testing every deploy
 
-## 8. Smoke Test Script
+## 9. Smoke Test Script
 
 Before marking a Railway deploy good:
 
 1. `GET /health` returns `ok: true`
-2. `/setup` works in a test guild
-3. `/season start` posts a usable season flow
-4. `/join` creates a member profile
-5. `/summary channel` returns a sane digest
-6. `Summarize From Here` works on a selected message
-7. `/optout` cleanly exits the season
+2. `GET /catalyst/modules` returns the module manifest
+3. `/setup` works in a test guild
+4. `/season start` posts a usable season flow
+5. `/ritual prompt` posts a usable question-loop prompt
+6. `/join` creates a member profile
+7. `/summary channel` returns a sane digest
+8. `Summarize From Here` works on a selected message
+9. `/optout` cleanly exits the season
 
-## 9. Notes
+## 10. Notes
 
 - Local JSON state is still available for development when no database is configured.
 - Railway production should use Postgres-backed state.
 - Summary commands rely on command-triggered history access, not Message Content Intent.
+- The slug-brand assets live in `assets/brand/` and are served directly by the app.

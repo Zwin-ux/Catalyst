@@ -6,6 +6,7 @@ import {
 } from 'discord.js';
 
 import type {
+  CatalystModule,
   GuildOverview,
   JoinSeasonResult,
   LeaderboardEntry,
@@ -13,26 +14,28 @@ import type {
   Season,
   SeasonEvent,
 } from '../catalyst';
+import type { RitualPrompt } from './rituals';
 import type { ChannelSummary } from './summaries';
 
 const CONSOLE = {
   ink: 0x68d5ff,
   relay: 0x84a7ff,
   ember: 0xff8b67,
-  neutral: 0x10151d,
 };
 
 function progressBar(value: number, maxValue: number): string {
   const safeMax = Math.max(maxValue, 1);
-  const filled = Math.max(1, Math.round((value / safeMax) * 8));
+  const filled = value <= 0 ? 0 : Math.max(1, Math.round((value / safeMax) * 8));
   return `[${'#'.repeat(filled)}${'-'.repeat(8 - filled)}]`;
 }
 
 function formatCrewLines(season: Season): string {
+  const maxPoints = Math.max(...season.crews.map((entry) => entry.points), 1);
+
   return season.crews
     .map(
       (crew) =>
-        `\`${crew.name.padEnd(6, ' ')}\` ${progressBar(crew.points, Math.max(...season.crews.map((entry) => entry.points), 1))} ${crew.points} pts`,
+        `\`${crew.name.padEnd(6, ' ')}\` ${progressBar(crew.points, maxPoints)} ${crew.points} pts`,
     )
     .join('\n');
 }
@@ -45,9 +48,9 @@ export function buildSetupEmbed(overview: GuildOverview): EmbedBuilder {
 
   return new EmbedBuilder()
     .setColor(CONSOLE.ink)
-    .setTitle('Catalyst is ready')
+    .setTitle('Catalyst control room is ready')
     .setDescription(
-      'One season board. Three crews. Clear consent. Nothing hidden.\n\nThis server now has the hosted Catalyst control layer configured.',
+      'One board. A clean consent layer. Daily prompts and sharp recaps when you want them.\n\nThis server now has the hosted Catalyst control layer configured.',
     )
     .addFields(
       {
@@ -71,11 +74,11 @@ export function buildSetupEmbed(overview: GuildOverview): EmbedBuilder {
       },
       {
         name: 'Status',
-        value: `${seasonLine}\nUse \`/season start\` when you want the room live.`,
+        value: `${seasonLine}\nUse \`/season start\` to launch the board or \`/ritual prompt\` when the room needs a reset.`,
       },
     )
     .setFooter({
-      text: 'Duolingo-quality flow, dev-console skin.',
+      text: 'Duolingo-quality clarity, black-slug control-deck skin.',
     });
 }
 
@@ -92,13 +95,13 @@ export function buildSeasonAnnouncementEmbed(
     .setColor(CONSOLE.relay)
     .setTitle(`${season.name} is live`)
     .setDescription(
-      'Opt in once. Get assigned to a crew. Leave any time with `/optout`.\n\nThe room is built for playful momentum, not hidden scoring.',
+      'Opt in once. Get assigned to a crew. Leave any time with `/optout`.\n\nThe room is built for visible momentum: prompts, boards, highlights, and recaps.',
     )
     .addFields(
       {
         name: 'How It Works',
         value:
-          '1. Hit **Join Season**\n2. Catalyst assigns your crew\n3. Weekly rituals, streaks, and recaps start immediately',
+          '1. Hit **Join Season**\n2. Catalyst assigns your crew\n3. Use `/ritual prompt` and `/summary channel` to keep the room moving',
       },
       {
         name: 'Crews',
@@ -142,11 +145,11 @@ export function buildJoinResultEmbed(result: JoinSeasonResult): EmbedBuilder {
       {
         name: 'What Unlocks Next',
         value:
-          'Watch for the next spotlight, weekly board refresh, and crew recap.\nYou can leave anytime with `/optout`.',
+          'Watch for the next ritual prompt, spotlight, board refresh, and crew recap.\nYou can leave anytime with `/optout`.',
       },
     )
     .setFooter({
-      text: `${result.season.name} • ${result.season.crews.length} crews active`,
+      text: `${result.season.name} - ${result.season.crews.length} crews active`,
     });
 }
 
@@ -158,7 +161,7 @@ export function buildLeaderboardEmbed(
   const board = leaderboard
     .map(
       (entry, index) =>
-        `${index + 1}. ${entry.crewName.padEnd(6, ' ')} ${entry.points} pts • ${entry.memberCount} members`,
+        `${index + 1}. ${entry.crewName.padEnd(6, ' ')} ${entry.points} pts - ${entry.memberCount} members`,
     )
     .join('\n');
 
@@ -241,7 +244,7 @@ export function buildChannelSummaryEmbed(summary: ChannelSummary): EmbedBuilder 
     .setColor(CONSOLE.ink)
     .setTitle(summary.title)
     .setDescription(
-      `${summary.totalMessages} messages • ${summary.participantCount} participants\nFast read, clear themes, next actions visible.`,
+      `${summary.totalMessages} messages - ${summary.participantCount} participants\nFast read, clear themes, next actions visible.`,
     )
     .addFields(
       {
@@ -266,5 +269,52 @@ export function buildChannelSummaryEmbed(summary: ChannelSummary): EmbedBuilder 
     )
     .setFooter({
       text: 'Built from explicit command access to channel history, not hidden ambient scraping.',
+    });
+}
+
+export function buildRitualPromptEmbed(prompt: RitualPrompt): EmbedBuilder {
+  return new EmbedBuilder()
+    .setColor(CONSOLE.relay)
+    .setTitle(prompt.title)
+    .setDescription(prompt.prompt)
+    .addFields(
+      {
+        name: 'Host Note',
+        value: prompt.hostLine,
+      },
+      {
+        name: 'Follow Through',
+        value: prompt.followThrough,
+      },
+      {
+        name: 'Why This Works',
+        value: prompt.whyItWorks,
+      },
+    )
+    .setFooter({
+      text: 'Question Loop module - one sharp prompt beats ten weak nudges.',
+    });
+}
+
+export function buildModuleCatalogEmbed(modules: CatalystModule[]): EmbedBuilder {
+  const lines = modules
+    .map(
+      (module) =>
+        `**${module.name}** [${module.status}] - ${module.cadence}\n${module.description}\nHooks: \`${module.hooks.join('`, `')}\``,
+    )
+    .join('\n\n');
+
+  return new EmbedBuilder()
+    .setColor(CONSOLE.ink)
+    .setTitle('Catalyst module rack')
+    .setDescription(
+      'Catalyst is shaping into a Discord-native engine: a small set of live modules now, stable plugin slots next.',
+    )
+    .addFields({
+      name: 'Live + Next',
+      value: lines,
+    })
+    .setFooter({
+      text: 'Use /ritual prompt to fire the Question Loop module now.',
     });
 }

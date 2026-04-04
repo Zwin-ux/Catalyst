@@ -21,7 +21,9 @@ The canonical runtime is the `src/` tree.
 - [`src/catalyst/store.ts`](../src/catalyst/store.ts) chooses Postgres-backed state when `DATABASE_URL` exists and falls back to JSON for local development.
 - [`src/discord/runtime.ts`](../src/discord/runtime.ts) registers slash commands, message context actions, and button flows.
 - [`src/discord/presenters.ts`](../src/discord/presenters.ts) defines the control-deck embed language.
+- [`src/discord/rituals.ts`](../src/discord/rituals.ts) generates the Question Loop ritual prompts that keep rooms active between bigger moments.
 - [`src/discord/summaries.ts`](../src/discord/summaries.ts) builds Discord-native channel summaries from command-triggered history access.
+- [`src/catalyst/modules.ts`](../src/catalyst/modules.ts) defines the live module rack and the plugin-shaped engine surface.
 
 Legacy directories like `bot/`, `commands/`, `actions/`, and parts of `plugins/` still exist, but they are not the primary v1 runtime path.
 
@@ -41,6 +43,8 @@ Member:
 - `/optout`
 - `/profile`
 - `/leaderboard`
+- `/ritual prompt`
+- `/ritual modules`
 - `/summary channel`
 - `/summary season`
 
@@ -60,6 +64,7 @@ The hosted flow is built around:
 - consent records
 - season events
 - season summaries
+- module manifests
 
 For Railway production, state should live in Postgres through `DATABASE_URL`.
 For local development, the fallback store uses `CATALYST_STATE_FILE` and defaults to `./data/catalyst-state.json`.
@@ -68,6 +73,7 @@ For local development, the fallback store uses `CATALYST_STATE_FILE` and default
 
 - `GET /health`
 - `GET /catalyst/health`
+- `GET /catalyst/modules`
 - `GET /catalyst/guilds/:guildId`
 - `GET /catalyst/guilds/:guildId/leaderboard`
 
@@ -117,4 +123,5 @@ Optional:
 - add richer season recaps and multi-surface summaries
 - move from single JSON-runtime fallback toward fuller normalized Postgres persistence
 - continue retiring unused legacy bot paths
-- replace placeholder visual assets with polished control-deck artwork
+- keep expanding the module rack into a true plugin engine
+- move the slug-brand assets into a fuller Figma handoff when a live design file exists

@@ -3,8 +3,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 dotenv.config();
 import type { Server } from 'http';
+import { resolve } from 'path';
 import type { Request, Response } from 'express';
 import { CatalystService } from './catalyst';
+import { listCatalystModules } from './catalyst/modules';
 import { appConfig } from './config/appConfig';
 import { buildDiscordInstallUrl } from './discord/install';
 import { startCatalystDiscord } from './discord/runtime';
@@ -24,6 +26,7 @@ let shuttingDown = false;
 
 app.use(cors());
 app.use(express.json());
+app.use('/assets', (express as any).static(resolve(process.cwd(), 'assets')));
 
 app.get('/', async (req: any, res: any) => {
   const forwardedProto = typeof req.headers['x-forwarded-proto'] === 'string'
@@ -42,6 +45,7 @@ app.get('/', async (req: any, res: any) => {
       persistence: hasDatabaseConnection() ? 'postgres' : 'json',
       timestamp: new Date().toISOString(),
       installReady: Boolean(appConfig.discordApplicationId),
+      modules: listCatalystModules(),
     }),
   );
 });

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { CatalystService } from '../catalyst';
+import { CatalystService, listCatalystModules } from '../catalyst';
 import { hasDatabaseConnection } from '../utils/db';
 
 export function createCatalystRouter(service: CatalystService): Router {
@@ -39,6 +39,13 @@ export function createCatalystRouter(service: CatalystService): Router {
       season: overview.activeSeason,
       leaderboard,
       events,
+    });
+  });
+
+  router.get('/modules', async (_req, res) => {
+    res.status(200).json({
+      modules: listCatalystModules(),
+      pluginReady: true,
     });
   });
 

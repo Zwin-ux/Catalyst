@@ -8,14 +8,18 @@ It gives a server one clear loop:
 
 The product target is simple on purpose. Catalyst should feel as clear and habit-forming as Duolingo, but with a premium dev-console shell: dark control-room surfaces, mono accents, crisp progress feedback, and low-friction actions.
 
+The current visual system is anchored by a black slug silhouette: a cleaner, stranger mascot than generic bot art, with a quiet control-room mood instead of loud gamer clutter.
+
 ## What It Does
 
 - Runs opt-in server seasons with crews, streaks, and leaderboard momentum.
 - Keeps consent explicit and reversible with `/join` and `/optout`.
 - Uses slash commands, buttons, and bot-authored boards instead of ambient message scraping.
 - Summarizes channels and season activity with Discord-native app commands.
+- Restarts quiet rooms with question-loop ritual prompts.
 - Gives admins a guided setup flow instead of a config dump.
 - Exposes a lightweight hosted API for health and season snapshots.
+- Exposes a module rack so the product can grow into a plugin-shaped engine.
 
 ## Core Commands
 
@@ -33,6 +37,8 @@ Member:
 - `/optout`
 - `/profile`
 - `/leaderboard`
+- `/ritual prompt`
+- `/ritual modules`
 - `/summary channel`
 - `/summary season`
 
@@ -46,6 +52,7 @@ Discord app tools:
 - One dominant next action on every major surface.
 - Clear consent and easy exit.
 - Strong progress feedback: crews, points, streaks, and recent moves.
+- Lightweight rituals that keep rooms warm between bigger events.
 - Friendly, direct copy with a little bite.
 - No generic SaaS dashboards in v1. The product lives inside Discord.
 
@@ -76,6 +83,7 @@ If Discord credentials are not present, the HTTP service still runs and the host
 - `GET /health`
 - `GET /invite`
 - `GET /catalyst/health`
+- `GET /catalyst/modules`
 - `GET /catalyst/guilds/:guildId`
 - `GET /catalyst/guilds/:guildId/leaderboard`
 
@@ -99,6 +107,9 @@ Catalyst should feel like a premium arcade command deck:
 - warm ember highlights for wins and alerts
 - monospaced status language
 - bold celebration moments without cartoon clutter
+- black slug mascot stamp used sparingly but consistently
+
+The living design system now lives in [DESIGN.md](DESIGN.md), and the current SVG brand assets live in [assets/brand/catalyst-slug-mark.svg](assets/brand/catalyst-slug-mark.svg) and [assets/brand/catalyst-slug-app-icon.svg](assets/brand/catalyst-slug-app-icon.svg).
 
 The original repo screenshots are treated as aesthetic reference only, not as the product finish line.
 
@@ -116,6 +127,8 @@ This repo now contains the first hosted v1 slice:
 - consent records
 - join / opt-out / profile / leaderboard flows
 - channel and season summary flows
+- question-loop ritual prompts
+- module manifest for the plugin-shaped engine direction
 - Discord command runtime
 - Railway deploy contract
 - CI verification workflow
